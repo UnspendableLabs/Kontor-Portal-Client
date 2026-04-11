@@ -38,11 +38,15 @@
   },
   "peerDependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",
+    "@kontor/kontor-crypto": "^0.2.0-alpha",
     "bip32": "^5.0.0-rc.0",
     "bitcoinjs-lib": "^7.0.0-rc.0",
     "react": ">=18"
   },
   "peerDependenciesMeta": {
+    "@kontor/kontor-crypto": {
+      "optional": true
+    },
     "react": {
       "optional": true
     }

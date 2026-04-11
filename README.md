@@ -15,7 +15,7 @@ The client uses dependency injection for the wallet signer (`BLSSigner`) and for
 ## Installation
 
 ```bash
-npm install kontor-portal-client
+npm install kontor-portal-client @kontor/kontor-crypto
 ```
 
 Peer dependencies (install if not already present):
@@ -25,6 +25,8 @@ npm install bip32 @bitcoinerlab/secp256k1 bitcoinjs-lib
 ```
 
 For React bindings, also install React 18+.
+
+`@kontor/kontor-crypto` is optional — you can skip it if you provide your own `KontorCryptoProvider` (see [Custom adapters](#kontorcryptoprovider)).
 
 ## Setup
 
@@ -47,8 +49,8 @@ const client = new KontorPortalClient({
   network: networks.bitcoin, // default: signet (testnet)
   kontorContractAddress: "my_contract", // default: "filestorage_0_0"
   // signer: myCustomSigner, // default: new HorizonWalletSigner()
-  // crypto: myCustomCrypto, // default: { prepareFile } (WASM)
-  // wasmUrl: "/custom/kontor-crypto/index.js", // default: "/kontor-crypto/index.js"
+  // crypto: myCustomCrypto, // default: WASM via @kontor/kontor-crypto
+  // wasmUrl: "/custom/path/index.js", // default: "/kontor-crypto/index.js"
   // nonceProvider: myNonceProvider, // default: new InMemoryNonceProvider()
 });
 ```
@@ -270,30 +272,69 @@ function MyComponent() {
 
 `PortalAuthStatus` is one of `"loading"` | `"authenticated"` | `"needs_registration"` | `"needs_login"` | `"logging_in"` | `"error"`.
 
-## Custom WASM URL
+## WASM crypto setup
 
-The default crypto provider loads its WASM module from `/kontor-crypto/index.js`. To serve it from a different path, use the `wasmUrl` config option:
+`@kontor/kontor-crypto` is a WASM module that handles Reed–Solomon encoding, Merkle tree computation, and file preparation. Because WASM cannot be bundled like regular JavaScript, the module must be **served as a static asset** by your application.
+
+At runtime the client loads the module with a dynamic `import()` from a URL (default: `/kontor-crypto/index.js`). You need to copy the package files into your public/static directory so the browser can fetch them.
+
+### Copy the files
+
+After installing `@kontor/kontor-crypto`, copy its contents to a `kontor-crypto/` folder inside your public directory:
+
+```bash
+cp -r node_modules/@kontor/kontor-crypto/dist/* public/kontor-crypto/
+```
+
+> **Tip:** Add this to a `postinstall` script so it stays in sync:
+>
+> ```jsonc
+> // package.json
+> "scripts": {
+>   "postinstall": "cp -r node_modules/@kontor/kontor-crypto/dist/* public/kontor-crypto/"
+> }
+> ```
+
+### Framework-specific examples
+
+**Vite** — files in `public/` are served at the root:
+
+```bash
+cp -r node_modules/@kontor/kontor-crypto/dist/* public/kontor-crypto/
+```
+
+No config change needed — the default `/kontor-crypto/index.js` URL will work.
+
+**Next.js** — same approach with the `public/` directory:
+
+```bash
+cp -r node_modules/@kontor/kontor-crypto/dist/* public/kontor-crypto/
+```
+
+### Custom URL
+
+If you serve the files from a different path, pass `wasmUrl`:
 
 ```typescript
 const client = new KontorPortalClient({
   portalHost: "https://portal.example.com",
-  wasmUrl: "/assets/kontor-crypto/index.js",
+  wasmUrl: "/assets/crypto/index.js",
 });
 ```
 
-Or build a standalone crypto provider with `createCryptoProvider`:
+Or create a standalone crypto provider with `createCryptoProvider`:
 
 ```typescript
 import { createCryptoProvider } from "kontor-portal-client";
 
-const crypto = createCryptoProvider("/custom/path/index.js");
+const crypto = createCryptoProvider("/assets/crypto/index.js");
 const client = new KontorPortalClient({
   portalHost: "https://portal.example.com",
   crypto,
 });
 ```
 
-If `crypto` is provided, `wasmUrl` is ignored.
+When `crypto` is provided, `wasmUrl` is ignored.
 
 ## Development
 
