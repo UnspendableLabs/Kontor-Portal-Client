@@ -174,6 +174,42 @@ describe("HorizonWalletSigner", () => {
       });
     });
 
+    it("forwards address when provided", async () => {
+      const requestFn = vi.fn().mockResolvedValue({
+        result: { signature: validSig },
+      });
+      installProvider({ request: requestFn });
+
+      const signer = new HorizonWalletSigner();
+      await signer.signBLS({
+        messageHex: "aabb",
+        dst: "DST",
+        address: "tb1myaddr",
+      });
+      expect(requestFn).toHaveBeenCalledWith("signMessageBLS", {
+        messageHex: "aabb",
+        dst: "DST",
+        address: "tb1myaddr",
+      });
+    });
+
+    it("omits address when not provided", async () => {
+      const requestFn = vi.fn().mockResolvedValue({
+        result: { signature: validSig },
+      });
+      installProvider({ request: requestFn });
+
+      const signer = new HorizonWalletSigner();
+      await signer.signBLS({
+        messageHex: "aabb",
+        dst: "DST",
+      });
+      expect(requestFn).toHaveBeenCalledWith("signMessageBLS", {
+        messageHex: "aabb",
+        dst: "DST",
+      });
+    });
+
     it("throws when neither message nor messageHex provided", async () => {
       const signer = new HorizonWalletSigner();
       await expect(

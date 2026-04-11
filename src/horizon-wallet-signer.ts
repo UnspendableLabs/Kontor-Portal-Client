@@ -75,15 +75,17 @@ export class HorizonWalletSigner implements BLSSigner {
 
   async signBLS(params: BLSSignParams): Promise<string> {
     const provider = this.getProvider();
-    let requestParams:
-      | { messageHex: string; dst: string }
-      | { message: string; dst: string };
+    let requestParams: Record<string, string>;
     if (params.messageHex !== undefined) {
       requestParams = { messageHex: params.messageHex, dst: params.dst };
     } else if (params.message !== undefined) {
       requestParams = { message: params.message, dst: params.dst };
     } else {
       throw new Error("BLSSignParams requires either message or messageHex");
+    }
+
+    if (params.address !== undefined) {
+      requestParams.address = params.address;
     }
 
     const response = await this.withTimeout(

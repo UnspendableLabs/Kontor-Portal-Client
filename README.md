@@ -64,13 +64,14 @@ const reg = await client.register("bc1p...", {
 });
 
 // Login
-const { jwt } = await client.login(reg.userId, {
+const { jwt } = await client.login(reg.userId, "bc1p...", {
   onStep: (step) => console.log("Login step:", step),
 });
 
 // Upload a file
 const result = await client.uploadFile(file, {
   xOnlyPubkey: reg.xOnlyPubkey,
+  address: "bc1p...",
   tags: ["document", "contract"],
   onStep: (step) => console.log("Upload step:", step),
   onPrepareProgress: (progress, phase) => {
@@ -95,12 +96,13 @@ const result = await client.uploadFile(file, {
   - `options?.onStep` — Called with register step names (see [Progress callbacks](#progress-callbacks)).
 - **Returns:** `RegistrationResult` with `userId`, `xOnlyPubkey`, `blsPubkey`, and `xpubkey`.
 
-### `login(userId, options?)`
+### `login(userId, address, options?)`
 
-- **Signature:** `login(userId: string, options?: LoginOptions): Promise<LoginResult>`
+- **Signature:** `login(userId: string, address: string, options?: LoginOptions): Promise<LoginResult>`
 - **Description:** Fetches a challenge, signs it with BLS (HTTP SIG domain), POSTs credentials, and stores the returned JWT on the client.
 - **Parameters:**
   - `userId` — User id returned from registration.
+  - `address` — Taproot address used for BLS key derivation.
   - `options?.onStep` — Called with login step names.
 - **Returns:** `LoginResult` with `jwt`, `userId`, optional `role`, and optional `expiresIn` (seconds until JWT expiry, derived from the token when possible).
 
@@ -119,6 +121,7 @@ const result = await client.uploadFile(file, {
 - **Parameters:**
   - `file` — Browser `File` to upload.
   - `options.xOnlyPubkey` — Signer x-only pubkey for registry lookup.
+  - `options.address` — Taproot address used for BLS key derivation (recommended when using Horizon Wallet).
   - `options.tags` — Optional string tags for the file.
   - `options.onStep`, `options.onPrepareProgress`, `options.onUploadProgress` — See [Progress callbacks](#progress-callbacks).
 - **Returns:** `UploadResult` with `sessionId`, `fileId`, `merkleRoot`, `filename`, and `size`.
@@ -184,12 +187,12 @@ class MyCustomSigner implements BLSSigner {
     /* return xpubkey, blsPubkey, schnorrSig, blsSig */
   }
   async signBLS(params: BLSSignParams): Promise<string> {
-    /* sign with either params.message or params.messageHex; params.dst is required */
+    /* sign with either params.message or params.messageHex; params.dst is required; params.address identifies the account */
   }
 }
 ```
 
-`BLSSignParams`: supply either `message` (UTF-8) or `messageHex`, not both, plus `dst` (domain separation tag).
+`BLSSignParams`: supply either `message` (UTF-8) or `messageHex`, not both, plus `dst` (domain separation tag). `address` (optional) identifies the account whose BLS key should sign.
 
 ### `KontorCryptoProvider`
 
@@ -255,6 +258,7 @@ function MyComponent() {
     jwt,             // current JWT or null
     isRegistered,    // true when a userId is stored
     portalUserId,
+    taprootAddress,
     xOnlyPubkey,
     login,           // () => Promise<void>
     logout,          // () => void

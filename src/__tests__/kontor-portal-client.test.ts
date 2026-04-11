@@ -160,6 +160,9 @@ describe("KontorPortalClient", () => {
       const client = makeClient({ signer });
       await client.register("tb1myaddr");
       expect(signer.getBLSPoP).toHaveBeenCalledWith("tb1myaddr");
+      expect(signer.signBLS).toHaveBeenCalledWith(
+        expect.objectContaining({ address: "tb1myaddr" }),
+      );
     });
 
     it("throws on 500 with portal unreachable message", async () => {
@@ -213,7 +216,7 @@ describe("KontorPortalClient", () => {
   describe("login", () => {
     it("happy path: returns LoginResult and stores JWT", async () => {
       const client = makeClient();
-      const result = await client.login("user-1");
+      const result = await client.login("user-1", "tb1addr");
       expect(result.jwt).toBeTruthy();
       expect(result.userId).toBe("user-1");
       expect(client.getJwt()).toBe(result.jwt);
@@ -223,7 +226,7 @@ describe("KontorPortalClient", () => {
     it("calls onStep in correct order", async () => {
       const client = makeClient();
       const steps: string[] = [];
-      await client.login("user-1", { onStep: (s) => steps.push(s) });
+      await client.login("user-1", "tb1addr", { onStep: (s) => steps.push(s) });
       expect(steps).toEqual(["challenge", "signing", "authenticating"]);
     });
 
@@ -233,7 +236,7 @@ describe("KontorPortalClient", () => {
       });
       vi.stubGlobal("fetch", mockFetch);
       const client = makeClient();
-      await expect(client.login("user-1")).rejects.toThrow(
+      await expect(client.login("user-1", "tb1addr")).rejects.toThrow(
         "Failed to get challenge",
       );
     });
@@ -244,7 +247,7 @@ describe("KontorPortalClient", () => {
       });
       vi.stubGlobal("fetch", mockFetch);
       const client = makeClient();
-      await expect(client.login("user-1")).rejects.toThrow(
+      await expect(client.login("user-1", "tb1addr")).rejects.toThrow(
         "Invalid challenge response",
       );
     });
@@ -259,7 +262,7 @@ describe("KontorPortalClient", () => {
       });
       vi.stubGlobal("fetch", mockFetch);
       const client = makeClient();
-      await expect(client.login("user-1")).rejects.toThrow(
+      await expect(client.login("user-1", "tb1addr")).rejects.toThrow(
         "Invalid signature",
       );
     });
@@ -270,16 +273,17 @@ describe("KontorPortalClient", () => {
       });
       vi.stubGlobal("fetch", mockFetch);
       const client = makeClient();
-      await expect(client.login("user-1")).rejects.toThrow("missing token");
+      await expect(client.login("user-1", "tb1addr")).rejects.toThrow("missing token");
     });
 
-    it("signs challenge with correct DST", async () => {
+    it("signs challenge with correct DST and address", async () => {
       const signer = createMockSigner();
       const client = makeClient({ signer });
-      await client.login("user-1");
+      await client.login("user-1", "tb1addr");
       expect(signer.signBLS).toHaveBeenCalledWith({
         message: "challenge-hex-abc123",
         dst: "HORIZON_PORTAL_HTTP_SIG",
+        address: "tb1addr",
       });
     });
 
@@ -294,7 +298,7 @@ describe("KontorPortalClient", () => {
       });
       vi.stubGlobal("fetch", mockFetch);
       const client = makeClient();
-      const result = await client.login("user-1");
+      const result = await client.login("user-1", "tb1addr");
       expect(result.role).toBe("admin");
       expect(result.expiresIn).toBeGreaterThan(7000);
     });

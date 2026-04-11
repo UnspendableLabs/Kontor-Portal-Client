@@ -137,6 +137,7 @@ describe("usePortalClient", () => {
   describe("login", () => {
     it("transitions through logging_in to authenticated", async () => {
       mockStorage.setItem("portal_user_id", "user-1");
+      mockStorage.setItem("portal_taproot_address", "tb1addr");
 
       const config = makeConfig();
       const { result } = renderHook(() => usePortalClient(), {
@@ -174,8 +175,29 @@ describe("usePortalClient", () => {
       expect(result.current.error).toContain("register first");
     });
 
+    it("sets error when user ID exists but no taproot address", async () => {
+      mockStorage.setItem("portal_user_id", "user-1");
+
+      const config = makeConfig();
+      const { result } = renderHook(() => usePortalClient(), {
+        wrapper: wrapper(config),
+      });
+
+      await vi.waitFor(() => {
+        expect(result.current.status).toBe("needs_login");
+      });
+
+      await act(async () => {
+        await result.current.login();
+      });
+
+      expect(result.current.status).toBe("error");
+      expect(result.current.error).toContain("taproot address");
+    });
+
     it("handles login failure", async () => {
       mockStorage.setItem("portal_user_id", "user-1");
+      mockStorage.setItem("portal_taproot_address", "tb1addr");
       mockFetch = createMockFetch({
         loginChallenge: () => new Response("fail", { status: 500 }),
       });
@@ -202,6 +224,7 @@ describe("usePortalClient", () => {
   describe("logout", () => {
     it("clears JWT and goes to needs_login", async () => {
       mockStorage.setItem("portal_user_id", "user-1");
+      mockStorage.setItem("portal_taproot_address", "tb1addr");
 
       const config = makeConfig();
       const { result } = renderHook(() => usePortalClient(), {
@@ -241,6 +264,7 @@ describe("usePortalClient", () => {
       act(() => {
         result.current.saveRegistration({
           portalUserId: "user-42",
+          taprootAddress: "tb1addr-test",
           xpubkey: "xpub-test",
           xOnlyPubkey: "xonly-test",
           blsPubkey: "bls-test",
@@ -249,6 +273,7 @@ describe("usePortalClient", () => {
 
       expect(result.current.status).toBe("needs_login");
       expect(result.current.portalUserId).toBe("user-42");
+      expect(result.current.taprootAddress).toBe("tb1addr-test");
       expect(result.current.xpubkey).toBe("xpub-test");
       expect(result.current.xOnlyPubkey).toBe("xonly-test");
       expect(result.current.blsPubkey).toBe("bls-test");
@@ -261,6 +286,7 @@ describe("usePortalClient", () => {
     it("clears all state and storage", async () => {
       mockStorage.setItem("portal_user_id", "user-1");
       mockStorage.setItem("portal_jwt", makeJwt());
+      mockStorage.setItem("portal_taproot_address", "tb1addr");
       mockStorage.setItem("portal_xpubkey", "xpub");
       mockStorage.setItem("portal_x_only_pubkey", "xonly");
       mockStorage.setItem("portal_bls_pubkey", "bls");
@@ -281,12 +307,14 @@ describe("usePortalClient", () => {
       expect(result.current.status).toBe("needs_registration");
       expect(result.current.jwt).toBeNull();
       expect(result.current.portalUserId).toBeNull();
+      expect(result.current.taprootAddress).toBeNull();
       expect(result.current.xpubkey).toBeNull();
       expect(result.current.xOnlyPubkey).toBeNull();
       expect(result.current.blsPubkey).toBeNull();
       expect(result.current.isRegistered).toBe(false);
       expect(mockStorage.getItem("portal_jwt")).toBeNull();
       expect(mockStorage.getItem("portal_user_id")).toBeNull();
+      expect(mockStorage.getItem("portal_taproot_address")).toBeNull();
     });
   });
 

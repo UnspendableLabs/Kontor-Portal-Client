@@ -24,6 +24,7 @@ export interface BLSSignParams {
   message?: string;
   messageHex?: string;
   dst: string;
+  address?: string;
 }
 
 export interface BLSSigner {
@@ -101,6 +102,7 @@ export interface LoginOptions {
  */
 export interface UploadOptions {
   xOnlyPubkey: string;
+  address?: string;
   tags?: string[];
   onStep?: (step: UploadStep) => void;
   onPrepareProgress?: (progress: number, phase: ProgressPhase) => void;

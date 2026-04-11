@@ -174,6 +174,7 @@ export class KontorPortalClient {
     const signature = await this.signer.signBLS({
       messageHex: bytesToHex(messageBytes),
       dst: KONTOR_BLS_DST,
+      address: taprootAddress,
     });
 
     options?.onStep?.("registering");
@@ -217,6 +218,7 @@ export class KontorPortalClient {
 
   async login(
     userId: string,
+    address: string,
     options?: LoginOptions,
   ): Promise<LoginResult> {
     options?.onStep?.("challenge");
@@ -239,6 +241,7 @@ export class KontorPortalClient {
     const signature = await this.signer.signBLS({
       message: challenge,
       dst: "HORIZON_PORTAL_HTTP_SIG",
+      address,
     });
 
     options?.onStep?.("authenticating");
@@ -357,6 +360,7 @@ export class KontorPortalClient {
     const blsSignature = await this.signer.signBLS({
       messageHex: bytesToHex(messageBytes),
       dst: KONTOR_BLS_DST,
+      address: options.address,
     });
 
     const mimeType = file.type || "application/octet-stream";

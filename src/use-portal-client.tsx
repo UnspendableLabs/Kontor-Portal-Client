@@ -23,6 +23,7 @@ export type PortalAuthStatus =
 const STORAGE_KEYS = {
   jwt: "portal_jwt",
   userId: "portal_user_id",
+  taprootAddress: "portal_taproot_address",
   xpubkey: "portal_xpubkey",
   xOnlyPubkey: "portal_x_only_pubkey",
   blsPubkey: "portal_bls_pubkey",
@@ -35,6 +36,7 @@ interface PortalClientContextValue {
   error: string | null;
   isRegistered: boolean;
   portalUserId: string | null;
+  taprootAddress: string | null;
   xpubkey: string | null;
   xOnlyPubkey: string | null;
   blsPubkey: string | null;
@@ -44,6 +46,7 @@ interface PortalClientContextValue {
   reset: () => void;
   saveRegistration: (data: {
     portalUserId: string;
+    taprootAddress: string;
     xpubkey: string;
     xOnlyPubkey: string;
     blsPubkey: string;
@@ -77,6 +80,7 @@ export function PortalClientProvider({
   const [jwt, setJwt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [portalUserId, setPortalUserId] = useState<string | null>(null);
+  const [taprootAddress, setTaprootAddress] = useState<string | null>(null);
   const [xpubkey, setXpubkey] = useState<string | null>(null);
   const [xOnlyPubkey, setXOnlyPubkey] = useState<string | null>(null);
   const [blsPubkey, setBlsPubkey] = useState<string | null>(null);
@@ -87,11 +91,13 @@ export function PortalClientProvider({
 
     const storedJwt = localStorage.getItem(STORAGE_KEYS.jwt);
     const storedUserId = localStorage.getItem(STORAGE_KEYS.userId);
+    const storedTaprootAddress = localStorage.getItem(STORAGE_KEYS.taprootAddress);
     const storedXpubkey = localStorage.getItem(STORAGE_KEYS.xpubkey);
     const storedXOnlyPubkey = localStorage.getItem(STORAGE_KEYS.xOnlyPubkey);
     const storedBlsPubkey = localStorage.getItem(STORAGE_KEYS.blsPubkey);
 
     setPortalUserId(storedUserId);
+    setTaprootAddress(storedTaprootAddress);
     setXpubkey(storedXpubkey);
     setXOnlyPubkey(storedXOnlyPubkey);
     setBlsPubkey(storedBlsPubkey);
@@ -116,12 +122,17 @@ export function PortalClientProvider({
       setStatus("error");
       return;
     }
+    if (!taprootAddress) {
+      setError("No taproot address — register first");
+      setStatus("error");
+      return;
+    }
 
     setStatus("logging_in");
     setError(null);
 
     try {
-      const result = await client.login(portalUserId);
+      const result = await client.login(portalUserId, taprootAddress);
       localStorage.setItem(STORAGE_KEYS.jwt, result.jwt);
       setJwt(result.jwt);
       setStatus("authenticated");
@@ -131,7 +142,7 @@ export function PortalClientProvider({
       setError(message);
       setStatus("error");
     }
-  }, [client, portalUserId]);
+  }, [client, portalUserId, taprootAddress]);
 
   const logout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEYS.jwt);
@@ -144,16 +155,19 @@ export function PortalClientProvider({
   const saveRegistration = useCallback(
     (data: {
       portalUserId: string;
+      taprootAddress: string;
       xpubkey: string;
       xOnlyPubkey: string;
       blsPubkey: string;
     }) => {
       localStorage.setItem(STORAGE_KEYS.userId, data.portalUserId);
+      localStorage.setItem(STORAGE_KEYS.taprootAddress, data.taprootAddress);
       localStorage.setItem(STORAGE_KEYS.xpubkey, data.xpubkey);
       localStorage.setItem(STORAGE_KEYS.xOnlyPubkey, data.xOnlyPubkey);
       localStorage.setItem(STORAGE_KEYS.blsPubkey, data.blsPubkey);
 
       setPortalUserId(data.portalUserId);
+      setTaprootAddress(data.taprootAddress);
       setXpubkey(data.xpubkey);
       setXOnlyPubkey(data.xOnlyPubkey);
       setBlsPubkey(data.blsPubkey);
@@ -169,6 +183,7 @@ export function PortalClientProvider({
     client.clearJwt();
     setJwt(null);
     setPortalUserId(null);
+    setTaprootAddress(null);
     setXpubkey(null);
     setXOnlyPubkey(null);
     setBlsPubkey(null);
@@ -184,6 +199,7 @@ export function PortalClientProvider({
       error,
       isRegistered: portalUserId !== null,
       portalUserId,
+      taprootAddress,
       xpubkey,
       xOnlyPubkey,
       blsPubkey,
@@ -193,7 +209,7 @@ export function PortalClientProvider({
       reset,
       saveRegistration,
     }),
-    [client, status, jwt, error, portalUserId, xpubkey, xOnlyPubkey, blsPubkey, login, logout, reset, saveRegistration],
+    [client, status, jwt, error, portalUserId, taprootAddress, xpubkey, xOnlyPubkey, blsPubkey, login, logout, reset, saveRegistration],
   );
 
   return (
