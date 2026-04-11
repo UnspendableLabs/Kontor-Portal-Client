@@ -1,7 +1,7 @@
 # Kontor Portal Client
 
 [![CI](https://github.com/UnspendableLabs/Kontor-Portal-Client/actions/workflows/ci.yml/badge.svg)](https://github.com/UnspendableLabs/Kontor-Portal-Client/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/UnspendableLabs/Kontor-Portal-Client/graph/badge.svg)](https://codecov.io/gh/UnspendableLabs/Kontor-Portal-Client)
+[![codecov](https://codecov.io/gh/UnspendableLabs/Kontor-Portal-Client/graph/badge.svg?token=HbSf99y0yG)](https://codecov.io/gh/UnspendableLabs/Kontor-Portal-Client)
 [![npm version](https://img.shields.io/npm/v/kontor-portal-client.svg)](https://www.npmjs.com/package/kontor-portal-client)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)
