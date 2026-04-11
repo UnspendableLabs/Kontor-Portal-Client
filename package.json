@@ -1,0 +1,69 @@
+{
+  "name": "kontor-portal-client",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "TypeScript client for Kontor Portal — BLS registration, challenge login, and chunked file upload",
+  "license": "MIT",
+  "author": "Kontor",
+  "keywords": [
+    "kontor",
+    "portal",
+    "horizon",
+    "bls",
+    "bitcoin",
+    "file-storage"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "[ -d .git ] && git config core.hooksPath .githooks || true",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "@bitcoinerlab/secp256k1": "^1.1.1",
+    "bip32": "^5.0.0-rc.0",
+    "bitcoinjs-lib": "^7.0.0-rc.0",
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@bitcoinerlab/secp256k1": "^1.1.1",
+    "@eslint/js": "^10.0.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^4.1.4",
+    "bip32": "^5.0.0-rc.0",
+    "bitcoinjs-lib": "^7.0.0-rc.0",
+    "eslint": "^10.2.0",
+    "happy-dom": "^20.8.9",
+    "jsdom": "^29.0.2",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.5",
+    "typescript": "^5",
+    "typescript-eslint": "^8.58.1",
+    "vitest": "^4.1.4"
+  }
+}
