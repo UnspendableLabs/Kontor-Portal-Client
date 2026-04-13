@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/UnspendableLabs/Kontor-Portal-Client/actions/workflows/ci.yml/badge.svg)](https://github.com/UnspendableLabs/Kontor-Portal-Client/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/UnspendableLabs/Kontor-Portal-Client/graph/badge.svg?token=HbSf99y0yG)](https://codecov.io/gh/UnspendableLabs/Kontor-Portal-Client)
-[![npm version](https://img.shields.io/npm/v/kontor-portal-client.svg)](https://www.npmjs.com/package/kontor-portal-client)
+[![npm version](https://img.shields.io/npm/v/@unspendablelabs/kontor-portal-client.svg)](https://www.npmjs.com/package/@unspendablelabs/kontor-portal-client)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)
 
@@ -15,7 +15,7 @@ The client uses dependency injection for the wallet signer (`BLSSigner`) and for
 ## Installation
 
 ```bash
-npm install kontor-portal-client @kontor/kontor-crypto
+npm install @unspendablelabs/kontor-portal-client @kontor/kontor-crypto
 ```
 
 Peer dependencies (install if not already present):
@@ -31,7 +31,7 @@ For React bindings, also install React 18+.
 ## Setup
 
 ```typescript
-import { KontorPortalClient } from "kontor-portal-client";
+import { KontorPortalClient } from "@unspendablelabs/kontor-portal-client";
 
 const client = new KontorPortalClient({
   portalHost: "https://portal.example.com",
@@ -41,7 +41,7 @@ const client = new KontorPortalClient({
 All other config fields are optional with sensible defaults (signet network, Horizon Wallet signer, WASM crypto, `filestorage_0_0` contract). Override any of them as needed:
 
 ```typescript
-import { KontorPortalClient } from "kontor-portal-client";
+import { KontorPortalClient } from "@unspendablelabs/kontor-portal-client";
 import { networks } from "bitcoinjs-lib";
 
 const client = new KontorPortalClient({
@@ -182,7 +182,7 @@ const result = await client.uploadFile(file, {
 ### `BLSSigner` (no Horizon Wallet)
 
 ```typescript
-import type { BLSSigner, BLSPoP, BLSSignParams } from "kontor-portal-client";
+import type { BLSSigner, BLSPoP, BLSSignParams } from "@unspendablelabs/kontor-portal-client";
 
 class MyCustomSigner implements BLSSigner {
   async getBLSPoP(address: string): Promise<BLSPoP> {
@@ -199,7 +199,7 @@ class MyCustomSigner implements BLSSigner {
 ### `KontorCryptoProvider`
 
 ```typescript
-import type { KontorCryptoProvider } from "kontor-portal-client";
+import type { KontorCryptoProvider } from "@unspendablelabs/kontor-portal-client";
 
 const crypto: KontorCryptoProvider = {
   async prepareFile(file, onProgress) {
@@ -211,7 +211,7 @@ const crypto: KontorCryptoProvider = {
 ### `NonceProvider`
 
 ```typescript
-import type { NonceProvider } from "kontor-portal-client";
+import type { NonceProvider } from "@unspendablelabs/kontor-portal-client";
 
 const nonceProvider: NonceProvider = {
   async getNextNonce(signerId, chainNonce) {
@@ -234,7 +234,7 @@ Wrap your app (or a subtree) with the provider. It accepts the same `KontorPorta
 > **Note:** `config` is read once on mount. Changing `config` after the initial render has no effect. Keep the reference stable (module-level constant or `useMemo`).
 
 ```tsx
-import { PortalClientProvider } from "kontor-portal-client/react";
+import { PortalClientProvider } from "@unspendablelabs/kontor-portal-client/react";
 
 <PortalClientProvider
   config={{
@@ -251,7 +251,7 @@ import { PortalClientProvider } from "kontor-portal-client/react";
 Returns the shared client and auth helpers:
 
 ```tsx
-import { usePortalClient } from "kontor-portal-client/react";
+import { usePortalClient } from "@unspendablelabs/kontor-portal-client/react";
 
 function MyComponent() {
   const {
@@ -325,7 +325,7 @@ const client = new KontorPortalClient({
 Or create a standalone crypto provider with `createCryptoProvider`:
 
 ```typescript
-import { createCryptoProvider } from "kontor-portal-client";
+import { createCryptoProvider } from "@unspendablelabs/kontor-portal-client";
 
 const crypto = createCryptoProvider("/assets/crypto/index.js");
 const client = new KontorPortalClient({
