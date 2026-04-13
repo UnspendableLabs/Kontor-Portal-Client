@@ -29,6 +29,7 @@ export interface MockFetchOverrides {
   filesValidate?: () => Response | Promise<Response>;
   agreementGet?: () => Response | Promise<Response>;
   agreementsList?: () => Response | Promise<Response>;
+  faucetPost?: () => Response | Promise<Response>;
 }
 
 export function createMockFetch(overrides: MockFetchOverrides = {}) {
@@ -88,7 +89,14 @@ export function createMockFetch(overrides: MockFetchOverrides = {}) {
       ) {
         return (
           overrides.registryEntry?.() ??
-          jsonResponse({ signer_id: 42, next_nonce: 5 })
+          jsonResponse({ signer_id: 42, next_nonce: 5, kor_balance: "100.5" })
+        );
+      }
+
+      if (url === `${PORTAL_HOST}/api/faucet` && method === "POST") {
+        return (
+          overrides.faucetPost?.() ??
+          jsonResponse({ status: "pending", message: "Faucet request submitted, will be included in next batch" }, 201)
         );
       }
 

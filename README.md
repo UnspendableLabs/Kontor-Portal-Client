@@ -48,6 +48,7 @@ const client = new KontorPortalClient({
   portalHost: "https://portal.example.com",
   network: networks.bitcoin, // default: signet (testnet)
   kontorContractAddress: "my_contract", // default: "filestorage_0_0"
+  // kontorTokenAddress: "token_0_0", // default: "token_0_0"
   // signer: myCustomSigner, // default: new HorizonWalletSigner()
   // crypto: myCustomCrypto, // default: WASM via @kontor/kontor-crypto
   // wasmUrl: "/custom/path/index.js", // default: "/kontor-crypto/index.js"
@@ -114,7 +115,17 @@ const result = await client.uploadFile(file, {
 - **Description:** Looks up the signer in the portal registry and returns signer id and next nonce. If a `nonceProvider` is configured, `nextNonce` may be adjusted by `getNextNonce`.
 - **Parameters:**
   - `xOnlyPubkey` — Hex x-only pubkey for the signer (e.g. from registration).
-- **Returns:** `{ signerId: number; nextNonce: number }`. Sends `Authorization` when a JWT is present.
+- **Returns:** `{ signerId: number; nextNonce: number; korBalance: string | null }`. Sends `Authorization` when a JWT is present.
+
+### `mintKOR(xOnlyPubkey, options?)`
+
+- **Signature:** `mintKOR(xOnlyPubkey: string, options?: MintKOROptions): Promise<MintKORResult>`
+- **Description:** Requests free KOR tokens from the faucet. Builds and signs a `mint(10)` call on the token contract, then submits it. Requires authentication.
+- **Parameters:**
+  - `xOnlyPubkey` — Hex x-only pubkey for the signer (e.g. from registration).
+  - `options?.address` — Taproot address for BLS signing.
+  - `options?.onStep` — Called with step names: `"fetching"` | `"signing"` | `"submitting"`.
+- **Returns:** `MintKORResult` with `status` (e.g. `"pending"`) and `message`.
 
 ### `uploadFile(file, options)`
 
@@ -171,6 +182,7 @@ const result = await client.uploadFile(file, {
 |------|--------|
 | Register | `"pop"` → `"signing"` → `"registering"` |
 | Login | `"challenge"` → `"signing"` → `"authenticating"` |
+| Mint KOR | `"fetching"` → `"signing"` → `"submitting"` |
 | Upload | `"preparing"` → `"signing"` → `"initiating"` → `"uploading"` → `"validating"` |
 
 **`onPrepareProgress(progress, phase)`** — Passed through to `KontorCryptoProvider.prepareFile`. `progress` is in the inclusive range **0–1**. `phase` is a `ProgressPhase` from kontor-crypto: `"reading"`, `"encoding"`, `"merkle"`, or `"finalizing"`.
