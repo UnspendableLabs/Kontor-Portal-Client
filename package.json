@@ -5,6 +5,10 @@
   "description": "TypeScript client for Kontor Portal — BLS registration, challenge login, and chunked file upload",
   "license": "MIT",
   "author": "Kontor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UnspendableLabs/Kontor-Portal-Client.git"
+  },
   "keywords": [
     "kontor",
     "portal",
