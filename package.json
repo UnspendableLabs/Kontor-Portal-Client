@@ -1,6 +1,6 @@
 {
   "name": "@unspendablelabs/kontor-portal-client",
-  "version": "0.1.0-alpha",
+  "version": "0.1.0",
   "type": "module",
   "description": "TypeScript client for Kontor Portal — BLS registration, challenge login, and chunked file upload",
   "license": "MIT",
