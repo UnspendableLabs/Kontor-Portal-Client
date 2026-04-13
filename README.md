@@ -120,7 +120,7 @@ const result = await client.uploadFile(file, {
 ### `mintKOR(xOnlyPubkey, options?)`
 
 - **Signature:** `mintKOR(xOnlyPubkey: string, options?: MintKOROptions): Promise<MintKORResult>`
-- **Description:** Requests free KOR tokens from the faucet. Builds and signs a `mint(10)` call on the token contract, then submits it. Requires authentication.
+- **Description:** Requests free KOR tokens from the faucet. Builds and signs a `mint` call (10 KOR, encoded as a `decimal` WAVE record) on the token contract, then submits it. Requires authentication.
 - **Parameters:**
   - `xOnlyPubkey` — Hex x-only pubkey for the signer (e.g. from registration).
   - `options?.address` — Taproot address for BLS signing.
