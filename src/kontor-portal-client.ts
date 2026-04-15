@@ -338,13 +338,11 @@ export class KontorPortalClient {
     options?.onStep?.("fetching");
     const { signerId, nextNonce } = await this.getSignerInfo(xOnlyPubkey);
 
-    const mintExpr =
-      "issuance({r0: 10000000000000000000, r1: 0, r2: 0, r3: 0, sign: plus})";
     const messageBytes = buildCreateAgreementMessage(
       signerId,
       nextNonce,
       this.kontorTokenAddress,
-      mintExpr,
+      "mint(10)",
     );
 
     options?.onStep?.("signing");
