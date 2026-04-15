@@ -9,8 +9,6 @@ import {
   type LoginResult,
   type LoginOptions,
   type SignerInfo,
-  type MintKOROptions,
-  type MintKORResult,
   type UploadResult,
   type UploadOptions,
   type Agreement,
@@ -33,7 +31,6 @@ import { networks } from "bitcoinjs-lib";
 
 const CHUNK_SIZE = 256 * 1024; // 256 KiB
 const DEFAULT_CONTRACT = "filestorage_0_0";
-const DEFAULT_TOKEN_CONTRACT = "token_0_0";
 
 /**
  * Tracks the highest nonce used per signer in memory. Prevents nonce reuse
@@ -57,7 +54,6 @@ export class InMemoryNonceProvider implements NonceProvider {
 export class KontorPortalClient {
   private readonly portalHost: string;
   private readonly kontorContractAddress: string;
-  private readonly kontorTokenAddress: string;
   private readonly network: Network;
   private readonly validationDelayMs: number;
   private readonly signer: BLSSigner;
@@ -69,7 +65,6 @@ export class KontorPortalClient {
     this.portalHost = config.portalHost;
     this.kontorContractAddress =
       config.kontorContractAddress ?? DEFAULT_CONTRACT;
-    this.kontorTokenAddress = config.kontorTokenAddress ?? DEFAULT_TOKEN_CONTRACT;
     this.network = config.network ?? networks.testnet;
     this.validationDelayMs = config.validationDelayMs ?? 2000;
     this.signer = config.signer ?? new HorizonWalletSigner();
@@ -314,7 +309,6 @@ export class KontorPortalClient {
     const data = (await res.json()) as {
       signer_id: number;
       next_nonce: number;
-      kor_balance?: string | null;
     };
 
     const effectiveNonce = await this.nonceProvider.getNextNonce(
@@ -322,68 +316,7 @@ export class KontorPortalClient {
       data.next_nonce,
     );
 
-    return {
-      signerId: data.signer_id,
-      nextNonce: effectiveNonce,
-      korBalance: data.kor_balance ?? null,
-    };
-  }
-
-  async mintKOR(
-    xOnlyPubkey: string,
-    options?: MintKOROptions,
-  ): Promise<MintKORResult> {
-    this.requireJwt();
-
-    options?.onStep?.("fetching");
-    const { signerId, nextNonce } = await this.getSignerInfo(xOnlyPubkey);
-
-    const messageBytes = buildCreateAgreementMessage(
-      signerId,
-      nextNonce,
-      this.kontorTokenAddress,
-      "mint(10)",
-    );
-
-    options?.onStep?.("signing");
-    const blsSignature = await this.signer.signBLS({
-      messageHex: bytesToHex(messageBytes),
-      dst: KONTOR_BLS_DST,
-      address: options?.address,
-    });
-
-    options?.onStep?.("submitting");
-    const res = await this.portalFetch("/api/faucet", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        bls_signature: blsSignature,
-        nonce: nextNonce,
-      }),
-    });
-
-    if (!res.ok) {
-      await KontorPortalClient.throwResponseError(
-        res,
-        `Faucet request failed (${res.status})`,
-      );
-    }
-
-    const result = (await res.json()) as {
-      status?: string;
-      message?: string;
-    };
-
-    try {
-      await this.nonceProvider.reportNonceUsed?.(signerId, nextNonce);
-    } catch {
-      /* non-critical */
-    }
-
-    return {
-      status: result.status ?? "pending",
-      message: result.message ?? "",
-    };
+    return { signerId: data.signer_id, nextNonce: effectiveNonce };
   }
 
   async uploadFile(

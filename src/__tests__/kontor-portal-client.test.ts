@@ -310,17 +310,6 @@ describe("KontorPortalClient", () => {
       const info = await client.getSignerInfo("ab".repeat(32));
       expect(info.signerId).toBe(42);
       expect(info.nextNonce).toBe(5);
-      expect(info.korBalance).toBe("100.5");
-    });
-
-    it("returns null korBalance when not present", async () => {
-      mockFetch = createMockFetch({
-        registryEntry: () => jsonResponse({ signer_id: 42, next_nonce: 5 }),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      const info = await client.getSignerInfo("ab".repeat(32));
-      expect(info.korBalance).toBeNull();
     });
 
     it("includes auth header when JWT is set", async () => {
@@ -361,64 +350,6 @@ describe("KontorPortalClient", () => {
       const client = makeClient({ nonceProvider: np });
       const info = await client.getSignerInfo("pub");
       expect(info.nextNonce).toBe(101);
-    });
-  });
-
-  describe("mintKOR", () => {
-    it("throws when not authenticated", async () => {
-      const client = makeClient();
-      await expect(
-        client.mintKOR("ab".repeat(32)),
-      ).rejects.toThrow("Not authenticated");
-    });
-
-    it("happy path: returns MintKORResult", async () => {
-      const client = makeClient();
-      client.setJwt(makeJwt());
-      const result = await client.mintKOR("ab".repeat(32));
-      expect(result.status).toBe("pending");
-      expect(result.message).toBe("Faucet request submitted, will be included in next batch");
-    });
-
-    it("calls onStep in correct order", async () => {
-      const client = makeClient();
-      client.setJwt(makeJwt());
-      const steps: string[] = [];
-      await client.mintKOR("ab".repeat(32), {
-        onStep: (s) => steps.push(s),
-      });
-      expect(steps).toEqual(["fetching", "signing", "submitting"]);
-    });
-
-    it("reports nonce to nonceProvider after mint", async () => {
-      const np = new InMemoryNonceProvider();
-      const reportSpy = vi.spyOn(np, "reportNonceUsed");
-      const client = makeClient({ nonceProvider: np });
-      client.setJwt(makeJwt());
-      await client.mintKOR("ab".repeat(32));
-      expect(reportSpy).toHaveBeenCalledWith(42, 5);
-    });
-
-    it("throws on faucet failure", async () => {
-      mockFetch = createMockFetch({
-        faucetPost: () => jsonResponse({ error: "Rate limited" }, 400),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      client.setJwt(makeJwt());
-      await expect(
-        client.mintKOR("ab".repeat(32)),
-      ).rejects.toThrow();
-    });
-
-    it("passes address to signer", async () => {
-      const signer = createMockSigner();
-      const client = makeClient({ signer });
-      client.setJwt(makeJwt());
-      await client.mintKOR("ab".repeat(32), { address: "tb1addr" });
-      expect(signer.signBLS).toHaveBeenCalledWith(
-        expect.objectContaining({ address: "tb1addr" }),
-      );
     });
   });
 

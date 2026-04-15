@@ -65,8 +65,6 @@ export interface KontorPortalClientConfig {
   portalHost: string;
   /** Defaults to `"filestorage_0_0"`. */
   kontorContractAddress?: string;
-  /** Defaults to `"token_0_0"`. */
-  kontorTokenAddress?: string;
   /** Defaults to signet (`testnet` from bitcoinjs-lib). */
   network?: Network;
   /** Defaults to `new HorizonWalletSigner()`. */
@@ -128,7 +126,6 @@ export interface LoginResult {
 export interface SignerInfo {
   signerId: number;
   nextNonce: number;
-  korBalance: string | null;
 }
 
 export interface UploadResult {
@@ -169,18 +166,6 @@ export interface AgreementsResponse {
 export interface ListAgreementsOptions {
   limit?: number;
   offset?: number;
-}
-
-export type MintKORStep = "fetching" | "signing" | "submitting";
-
-export interface MintKOROptions {
-  address?: string;
-  onStep?: (step: MintKORStep) => void;
-}
-
-export interface MintKORResult {
-  status: string;
-  message: string;
 }
 
 export class PortalNotFoundError extends Error {
