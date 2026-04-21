@@ -147,6 +147,9 @@ export interface Agreement {
   status: "pending" | "ready" | "confirmed" | "completed" | (string & {});
   nodes: string[];
   transaction_id?: string;
+  txid?: string | null;
+  block_height?: number | null;
+  block_time?: number | null;
   curation?: Record<string, unknown>;
   merkle_root?: string;
   data_symbols?: number;
@@ -166,6 +169,22 @@ export interface AgreementsResponse {
 export interface ListAgreementsOptions {
   limit?: number;
   offset?: number;
+  status?: string | string[];
+  users?: string[];
+  nodes?: string[];
+  mimeType?: string;
+  sort?: "created_at" | "size" | "filename";
+  sortDir?: "asc" | "desc";
+}
+
+export interface DownloadFileOptions {
+  /** When `true`, set the `force_download` query flag so the URL serves with `Content-Disposition: attachment`. */
+  forceDownload?: boolean;
+}
+
+export interface DownloadUrlResult {
+  /** Signed GCS URL when the agreement is `ready`, or storage node URL when `confirmed`. */
+  downloadUrl: string;
 }
 
 export class PortalNotFoundError extends Error {

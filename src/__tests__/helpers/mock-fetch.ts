@@ -5,6 +5,8 @@ import {
   makeJwt,
   AGREEMENT,
   AGREEMENTS_RESPONSE,
+  DOWNLOAD_URL,
+  DOWNLOAD_FILE_CONTENT,
 } from "./fixtures";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -29,6 +31,8 @@ export interface MockFetchOverrides {
   filesValidate?: () => Response | Promise<Response>;
   agreementGet?: () => Response | Promise<Response>;
   agreementsList?: () => Response | Promise<Response>;
+  agreementDownload?: () => Response | Promise<Response>;
+  signedDownload?: () => Response | Promise<Response>;
 }
 
 export function createMockFetch(overrides: MockFetchOverrides = {}) {
@@ -118,6 +122,26 @@ export function createMockFetch(overrides: MockFetchOverrides = {}) {
         method === "POST"
       ) {
         return overrides.filesValidate?.() ?? jsonResponse({ ok: true });
+      }
+
+      if (
+        url.match(/\/api\/agreements\/[^/?]+\/download(\?|$)/) &&
+        method === "GET"
+      ) {
+        return (
+          overrides.agreementDownload?.() ??
+          jsonResponse({ download_url: DOWNLOAD_URL })
+        );
+      }
+
+      if (url === DOWNLOAD_URL && method === "GET") {
+        return (
+          overrides.signedDownload?.() ??
+          new Response(DOWNLOAD_FILE_CONTENT, {
+            status: 200,
+            headers: { "Content-Type": "application/octet-stream" },
+          })
+        );
       }
 
       if (

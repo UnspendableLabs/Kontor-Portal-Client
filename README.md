@@ -131,19 +131,48 @@ const result = await client.uploadFile(file, {
 ### `getAgreement(agreementId)`
 
 - **Signature:** `getAgreement(agreementId: string): Promise<Agreement>`
-- **Description:** GETs a single agreement by ID for the authenticated user.
+- **Description:** GETs a single agreement by ID. **Public endpoint** — no JWT required (you do not need to call `setJwt()` first; any stored JWT is ignored for this call).
 - **Parameters:**
   - `agreementId` — The agreement ID to fetch.
-- **Returns:** `Agreement`. Throws if not found (404) or on other errors.
+- **Returns:** `Agreement` (see fields below, including on-chain `txid`, `block_height`, `block_time`). Throws if not found (404) or on other errors.
 
 ### `listAgreements(options?)`
 
 - **Signature:** `listAgreements(options?: ListAgreementsOptions): Promise<AgreementsResponse>`
-- **Description:** GETs paginated agreements for the authenticated user.
+- **Description:** GETs paginated agreements with optional filtering and sorting. **Public endpoint** — no JWT required.
 - **Parameters:**
   - `options?.limit` — Page size (default 20).
   - `options?.offset` — Offset (default 0).
+  - `options?.status` — Filter by status. Pass a single string (e.g. `"ready"`) or an array (e.g. `["ready", "pending"]`) which is serialized as a pipe-separated value (`status=ready|pending`).
+  - `options?.users` — Array of user IDs, serialized as a comma-separated list.
+  - `options?.nodes` — Array of node IDs, serialized as a comma-separated list.
+  - `options?.mimeType` — MIME type filter (sent as `mime_type`).
+  - `options?.sort` — Sort field: `"created_at"` (default on the server), `"size"`, or `"filename"`.
+  - `options?.sortDir` — Sort direction: `"asc"` or `"desc"` (sent as `sort_dir`).
 - **Returns:** `AgreementsResponse` with `offset`, `limit`, `total`, and `agreements[]`.
+
+The `Agreement` type includes the on-chain fields `txid` (Bitcoin transaction id, hex), `block_height`, and `block_time` (Unix timestamp in seconds). All three are nullable until the agreement is confirmed on-chain. The internal `transaction_id` (UUID) remains available for backward compatibility.
+
+### `getDownloadUrl(agreementId, options?)`
+
+- **Signature:** `getDownloadUrl(agreementId: string, options?: DownloadFileOptions): Promise<DownloadUrlResult>`
+- **Description:** Resolves the download URL for an agreement file via `GET /api/agreements/{agreement_id}/download?no_redirect=true`. The URL is a signed Google Cloud Storage URL when the agreement is `ready`, or a storage node URL when `confirmed`. **Public endpoint** — no JWT required.
+- **Parameters:**
+  - `agreementId` — The agreement ID to download.
+  - `options?.forceDownload` — When `true`, sends `force_download=true` so the resulting URL serves with `Content-Disposition: attachment`.
+- **Returns:** `{ downloadUrl: string }`. Throws `PortalNotFoundError` on 404, or a generic error with the server message for other failures (e.g. `403` when the agreement is not yet downloadable, `503` when no storage node is available).
+
+### `downloadFile(agreementId, options?)`
+
+- **Signature:** `downloadFile(agreementId: string, options?: DownloadFileOptions): Promise<Blob>`
+- **Description:** Convenience wrapper that calls `getDownloadUrl()` and then fetches the resulting URL, returning the file content as a `Blob`. Use it when you want the file bytes in memory; otherwise prefer `getDownloadUrl()` and pass the URL to `<a href>`, `window.open`, or a streaming consumer.
+- **Parameters:** Same as `getDownloadUrl`.
+- **Returns:** `Blob` with the downloaded file contents.
+
+```typescript
+const blob = await client.downloadFile("file_a1b2...");
+const url = URL.createObjectURL(blob);
+```
 
 ### `healthCheck()`
 
