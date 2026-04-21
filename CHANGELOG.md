@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 (2026-04-21)
+
+### Features
+
+- **`downloadFile(agreementId, options?)`** — convenience wrapper that resolves the download URL and fetches the file as a `Blob`.
+- **`getDownloadUrl(agreementId, options?)`** — resolves a signed GCS URL (when `ready`) or storage node URL (when `confirmed`) via `GET /api/agreements/{id}/download?no_redirect=true`. Supports `forceDownload` to set `Content-Disposition: attachment`.
+- **`listAgreements()` filtering & sorting** — new options: `status` (string or array, pipe-serialized), `users`, `nodes`, `mimeType`, `sort` (`created_at` | `size` | `filename`), and `sortDir` (`asc` | `desc`).
+- **On-chain fields on `Agreement`** — added nullable `txid` (Bitcoin transaction id, hex), `block_height`, and `block_time` (Unix seconds). Internal `transaction_id` (UUID) kept for backward compatibility.
+- **New exported types** — `DownloadFileOptions`, `DownloadUrlResult`.
+
+### Changes
+
+- `getAgreement()` and `listAgreements()` now hit the public endpoints directly (no JWT required); any stored JWT is ignored for these calls.
+
 ## 0.1.0 (2026-04-13)
 
 Initial public release.
