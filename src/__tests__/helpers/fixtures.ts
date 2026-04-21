@@ -77,6 +77,25 @@ export const AGREEMENT: Agreement = {
   created_at: "2025-01-01T00:00:00Z",
   status: "pending",
   nodes: ["node-1"],
+  txid: null,
+  block_height: null,
+  block_time: null,
+};
+
+export const AGREEMENT_CONFIRMED: Agreement = {
+  agreement_id: "agr-2",
+  user_id: "user-1",
+  file_id: "file-2",
+  filename: "confirmed.bin",
+  mime_type: "application/octet-stream",
+  original_size: 2048,
+  created_at: "2025-02-01T00:00:00Z",
+  status: "confirmed",
+  nodes: ["node-1", "node-2"],
+  transaction_id: "11111111-1111-4111-8111-111111111111",
+  txid: "a".repeat(64),
+  block_height: 800000,
+  block_time: 1700000000,
 };
 
 export const AGREEMENTS_RESPONSE: AgreementsResponse = {
@@ -85,3 +104,8 @@ export const AGREEMENTS_RESPONSE: AgreementsResponse = {
   total: 1,
   agreements: [AGREEMENT],
 };
+
+export const DOWNLOAD_URL =
+  "https://storage.googleapis.com/bucket/path/to/file?GoogleAccessId=test&Expires=9999&Signature=abc";
+
+export const DOWNLOAD_FILE_CONTENT = "downloaded-file-bytes";

@@ -25,6 +25,8 @@ export type {
   Agreement,
   AgreementsResponse,
   ListAgreementsOptions,
+  DownloadFileOptions,
+  DownloadUrlResult,
   PrepareResult,
   ProgressPhase,
   OnProgress,

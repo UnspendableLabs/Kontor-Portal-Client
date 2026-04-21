@@ -14,6 +14,8 @@ import {
   makeExpiredJwt,
   PREPARE_RESULT,
   POP,
+  DOWNLOAD_URL,
+  DOWNLOAD_FILE_CONTENT,
 } from "./helpers/fixtures";
 import type { KontorPortalClientConfig } from "../types";
 
@@ -559,7 +561,6 @@ describe("KontorPortalClient", () => {
   describe("getAgreement", () => {
     it("returns agreement", async () => {
       const client = makeClient();
-      client.setJwt(makeJwt());
       const agr = await client.getAgreement("agr-1");
       expect(agr.agreement_id).toBe("agr-1");
     });
@@ -571,7 +572,6 @@ describe("KontorPortalClient", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const client = makeClient();
-      client.setJwt(makeJwt());
       await expect(
         client.getAgreement("missing"),
       ).rejects.toBeInstanceOf(PortalNotFoundError);
@@ -584,24 +584,28 @@ describe("KontorPortalClient", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const client = makeClient();
-      client.setJwt(makeJwt());
       await expect(client.getAgreement("agr-1")).rejects.toThrow(
         "Failed to fetch agreement",
       );
     });
 
-    it("throws when not authenticated", async () => {
+    it("works without JWT (public endpoint)", async () => {
       const client = makeClient();
-      await expect(client.getAgreement("agr-1")).rejects.toThrow(
-        "Not authenticated",
+      const agr = await client.getAgreement("agr-1");
+      expect(agr.agreement_id).toBe("agr-1");
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements/agr-1"),
       );
+      expect(call).toBeDefined();
+      const headers = (call?.[1]?.headers ?? {}) as Record<string, string>;
+      expect(headers).not.toHaveProperty("Authorization");
     });
   });
 
   describe("listAgreements", () => {
     it("returns paginated response with defaults", async () => {
       const client = makeClient();
-      client.setJwt(makeJwt());
       const res = await client.listAgreements();
       expect(res.agreements).toHaveLength(1);
 
@@ -614,7 +618,6 @@ describe("KontorPortalClient", () => {
 
     it("passes custom limit and offset", async () => {
       const client = makeClient();
-      client.setJwt(makeJwt());
       await client.listAgreements({ limit: 5, offset: 10 });
 
       const call = mockFetch.mock.calls.find((c) =>
@@ -631,9 +634,262 @@ describe("KontorPortalClient", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const client = makeClient();
-      client.setJwt(makeJwt());
       await expect(client.listAgreements()).rejects.toThrow(
         "Failed to list agreements",
+      );
+    });
+
+    it("works without JWT (public endpoint)", async () => {
+      const client = makeClient();
+      await client.listAgreements();
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements?"),
+      );
+      expect(call).toBeDefined();
+      const headers = (call?.[1]?.headers ?? {}) as Record<string, string>;
+      expect(headers).not.toHaveProperty("Authorization");
+    });
+
+    it("passes status filter as string", async () => {
+      const client = makeClient();
+      await client.listAgreements({ status: "ready" });
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements?"),
+      );
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("status")).toBe("ready");
+    });
+
+    it("passes status filter as array (joined by |)", async () => {
+      const client = makeClient();
+      await client.listAgreements({ status: ["ready", "pending"] });
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements?"),
+      );
+      expect(String(call?.[0])).toContain("status=ready%7Cpending");
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("status")).toBe("ready|pending");
+    });
+
+    it("passes users filter (joined by ,)", async () => {
+      const client = makeClient();
+      await client.listAgreements({ users: ["user-1", "user-2"] });
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements?"),
+      );
+      expect(String(call?.[0])).toContain("users=user-1%2Cuser-2");
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("users")).toBe("user-1,user-2");
+    });
+
+    it("passes nodes filter (joined by ,)", async () => {
+      const client = makeClient();
+      await client.listAgreements({ nodes: ["node-1", "node-2"] });
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements?"),
+      );
+      expect(String(call?.[0])).toContain("nodes=node-1%2Cnode-2");
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("nodes")).toBe("node-1,node-2");
+    });
+
+    it("passes mimeType as mime_type", async () => {
+      const client = makeClient();
+      await client.listAgreements({ mimeType: "application/pdf" });
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements?"),
+      );
+      expect(String(call?.[0])).toContain("mime_type=application%2Fpdf");
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("mime_type")).toBe("application/pdf");
+    });
+
+    it("passes sort and sort_dir", async () => {
+      const client = makeClient();
+      await client.listAgreements({ sort: "size", sortDir: "asc" });
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements?"),
+      );
+      expect(String(call?.[0])).toContain("sort=size");
+      expect(String(call?.[0])).toContain("sort_dir=asc");
+    });
+
+    it("omits undefined filters", async () => {
+      const client = makeClient();
+      await client.listAgreements({});
+
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/agreements?"),
+      );
+      const url = new URL(String(call?.[0]));
+      const queryString = url.search.replace(/^\?/, "");
+      expect(queryString).toBe("limit=20&offset=0");
+    });
+  });
+
+  describe("getDownloadUrl", () => {
+    function findDownloadCall() {
+      return mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/download"),
+      );
+    }
+
+    it("returns the download URL", async () => {
+      const client = makeClient();
+      const result = await client.getDownloadUrl("agr-1");
+      expect(result.downloadUrl).toBe(DOWNLOAD_URL);
+    });
+
+    it("requests no_redirect=true so the API returns JSON", async () => {
+      const client = makeClient();
+      await client.getDownloadUrl("agr-1");
+      const call = findDownloadCall();
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("no_redirect")).toBe("true");
+    });
+
+    it("encodes the agreement id", async () => {
+      const client = makeClient();
+      await client.getDownloadUrl("file_with/slash");
+      const call = findDownloadCall();
+      expect(String(call?.[0])).toContain(
+        "/api/agreements/file_with%2Fslash/download",
+      );
+    });
+
+    it("passes force_download when requested", async () => {
+      const client = makeClient();
+      await client.getDownloadUrl("agr-1", { forceDownload: true });
+      const call = findDownloadCall();
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("force_download")).toBe("true");
+    });
+
+    it("omits force_download by default", async () => {
+      const client = makeClient();
+      await client.getDownloadUrl("agr-1");
+      const call = findDownloadCall();
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("force_download")).toBeNull();
+    });
+
+    it("works without JWT (public endpoint)", async () => {
+      const client = makeClient();
+      await client.getDownloadUrl("agr-1");
+      const call = findDownloadCall();
+      const headers = (call?.[1]?.headers ?? {}) as Record<string, string>;
+      expect(headers).not.toHaveProperty("Authorization");
+    });
+
+    it("throws PortalNotFoundError on 404", async () => {
+      mockFetch = createMockFetch({
+        agreementDownload: () => textResponse("Not Found", 404),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.getDownloadUrl("missing")).rejects.toBeInstanceOf(
+        PortalNotFoundError,
+      );
+    });
+
+    it("throws structured error from server (e.g. 403 INVALID_STATUS)", async () => {
+      mockFetch = createMockFetch({
+        agreementDownload: () =>
+          jsonResponse(
+            {
+              error: {
+                code: "INVALID_STATUS",
+                message: "Agreement must be in ready or confirmed status to download",
+                status: 403,
+              },
+            },
+            403,
+          ),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.getDownloadUrl("agr-1")).rejects.toThrow(
+        "Agreement must be in ready or confirmed status to download",
+      );
+    });
+
+    it("throws on 503 NO_AVAILABLE_NODE", async () => {
+      mockFetch = createMockFetch({
+        agreementDownload: () =>
+          jsonResponse(
+            {
+              error: {
+                code: "NO_AVAILABLE_NODE",
+                message: "No storage node with a public URL is available for this agreement",
+                status: 503,
+              },
+            },
+            503,
+          ),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.getDownloadUrl("agr-1")).rejects.toThrow(
+        "No storage node",
+      );
+    });
+
+    it("throws on invalid response shape", async () => {
+      mockFetch = createMockFetch({
+        agreementDownload: () => jsonResponse({}),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.getDownloadUrl("agr-1")).rejects.toThrow(
+        "missing download_url",
+      );
+    });
+  });
+
+  describe("downloadFile", () => {
+    it("returns a Blob with the file contents", async () => {
+      const client = makeClient();
+      const blob = await client.downloadFile("agr-1");
+      expect(blob).toBeInstanceOf(Blob);
+      expect(await blob.text()).toBe(DOWNLOAD_FILE_CONTENT);
+    });
+
+    it("forwards forceDownload to the URL request", async () => {
+      const client = makeClient();
+      await client.downloadFile("agr-1", { forceDownload: true });
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/download"),
+      );
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("force_download")).toBe("true");
+    });
+
+    it("throws when the signed URL fetch fails", async () => {
+      mockFetch = createMockFetch({
+        signedDownload: () => textResponse("Forbidden", 403),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.downloadFile("agr-1")).rejects.toThrow(
+        "Failed to download file",
+      );
+    });
+
+    it("propagates PortalNotFoundError from getDownloadUrl", async () => {
+      mockFetch = createMockFetch({
+        agreementDownload: () => textResponse("Not Found", 404),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.downloadFile("missing")).rejects.toBeInstanceOf(
+        PortalNotFoundError,
       );
     });
   });

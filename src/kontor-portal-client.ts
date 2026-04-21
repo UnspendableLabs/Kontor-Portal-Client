@@ -14,6 +14,8 @@ import {
   type Agreement,
   type AgreementsResponse,
   type ListAgreementsOptions,
+  type DownloadFileOptions,
+  type DownloadUrlResult,
 } from "./types";
 import {
   buildRegistrationMessage,
@@ -494,8 +496,8 @@ export class KontorPortalClient {
   }
 
   async getAgreement(agreementId: string): Promise<Agreement> {
-    const res = await this.portalFetch(
-      `/api/agreements/${encodeURIComponent(agreementId)}`,
+    const res = await fetch(
+      `${this.portalHost}/api/agreements/${encodeURIComponent(agreementId)}`,
     );
 
     if (res.status === 404) {
@@ -511,10 +513,41 @@ export class KontorPortalClient {
   async listAgreements(
     options?: ListAgreementsOptions,
   ): Promise<AgreementsResponse> {
-    const limit = options?.limit ?? 20;
-    const offset = options?.offset ?? 0;
-    const res = await this.portalFetch(
-      `/api/agreements?limit=${limit}&offset=${offset}`,
+    const params = new URLSearchParams();
+    params.set("limit", String(options?.limit ?? 20));
+    params.set("offset", String(options?.offset ?? 0));
+
+    if (options?.status !== undefined) {
+      const statusValue = Array.isArray(options.status)
+        ? options.status.join("|")
+        : options.status;
+      if (statusValue.length > 0) {
+        params.set("status", statusValue);
+      }
+    }
+
+    if (options?.users && options.users.length > 0) {
+      params.set("users", options.users.join(","));
+    }
+
+    if (options?.nodes && options.nodes.length > 0) {
+      params.set("nodes", options.nodes.join(","));
+    }
+
+    if (options?.mimeType) {
+      params.set("mime_type", options.mimeType);
+    }
+
+    if (options?.sort) {
+      params.set("sort", options.sort);
+    }
+
+    if (options?.sortDir) {
+      params.set("sort_dir", options.sortDir);
+    }
+
+    const res = await fetch(
+      `${this.portalHost}/api/agreements?${params.toString()}`,
     );
 
     if (!res.ok) {
@@ -522,5 +555,64 @@ export class KontorPortalClient {
     }
 
     return (await res.json()) as AgreementsResponse;
+  }
+
+  private buildDownloadUrl(
+    agreementId: string,
+    options?: DownloadFileOptions & { noRedirect?: boolean },
+  ): string {
+    const params = new URLSearchParams();
+    if (options?.forceDownload) {
+      params.set("force_download", "true");
+    }
+    if (options?.noRedirect) {
+      params.set("no_redirect", "true");
+    }
+    const query = params.toString();
+    const path = `/api/agreements/${encodeURIComponent(agreementId)}/download`;
+    return `${this.portalHost}${path}${query ? `?${query}` : ""}`;
+  }
+
+  async getDownloadUrl(
+    agreementId: string,
+    options?: DownloadFileOptions,
+  ): Promise<DownloadUrlResult> {
+    const url = this.buildDownloadUrl(agreementId, {
+      ...options,
+      noRedirect: true,
+    });
+
+    const res = await fetch(url);
+
+    if (res.status === 404) {
+      throw new PortalNotFoundError("Agreement not found");
+    }
+    if (!res.ok) {
+      await KontorPortalClient.throwResponseError(
+        res,
+        `Failed to get download URL (${res.status})`,
+      );
+    }
+
+    const data = (await res.json()) as { download_url?: unknown };
+    if (typeof data.download_url !== "string") {
+      throw new Error("Invalid download response: missing download_url");
+    }
+
+    return { downloadUrl: data.download_url };
+  }
+
+  async downloadFile(
+    agreementId: string,
+    options?: DownloadFileOptions,
+  ): Promise<Blob> {
+    const { downloadUrl } = await this.getDownloadUrl(agreementId, options);
+
+    const res = await fetch(downloadUrl);
+    if (!res.ok) {
+      throw new Error(`Failed to download file (${res.status})`);
+    }
+
+    return await res.blob();
   }
 }
