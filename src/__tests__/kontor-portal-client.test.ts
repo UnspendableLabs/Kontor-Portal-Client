@@ -307,11 +307,34 @@ describe("KontorPortalClient", () => {
   });
 
   describe("getSignerInfo", () => {
-    it("returns signer info", async () => {
+    it("returns signer info from x-only pubkey", async () => {
       const client = makeClient();
       const info = await client.getSignerInfo("ab".repeat(32));
       expect(info.signerId).toBe(42);
       expect(info.nextNonce).toBe(5);
+    });
+
+    it("accepts a numeric signer_id", async () => {
+      const client = makeClient();
+      const info = await client.getSignerInfo("0");
+      expect(info.signerId).toBe(42);
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/registry/entry/"),
+      );
+      expect(String(call?.[0])).toContain("/api/registry/entry/0");
+    });
+
+    it("accepts a Bitcoin address (URL-encoded)", async () => {
+      const client = makeClient();
+      const address = "tb1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqc8gma6";
+      const info = await client.getSignerInfo(address);
+      expect(info.signerId).toBe(42);
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/registry/entry/"),
+      );
+      expect(String(call?.[0])).toContain(
+        `/api/registry/entry/${encodeURIComponent(address)}`,
+      );
     });
 
     it("includes auth header when JWT is set", async () => {

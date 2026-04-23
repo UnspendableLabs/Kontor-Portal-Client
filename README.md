@@ -108,13 +108,16 @@ const result = await client.uploadFile(file, {
   - `options?.onStep` — Called with login step names.
 - **Returns:** `LoginResult` with `jwt`, `userId`, optional `role`, and optional `expiresIn` (seconds until JWT expiry, derived from the token when possible).
 
-### `getSignerInfo(xOnlyPubkey)`
+### `getSignerInfo(idOrPubkeyOrAddress)`
 
-- **Signature:** `getSignerInfo(xOnlyPubkey: string): Promise<SignerInfo>`
+- **Signature:** `getSignerInfo(idOrPubkeyOrAddress: string): Promise<SignerInfo>`
 - **Description:** Looks up the signer in the portal registry and returns signer id and next nonce. If a `nonceProvider` is configured, `nextNonce` may be adjusted by `getNextNonce`.
 - **Parameters:**
-  - `xOnlyPubkey` — Hex x-only pubkey for the signer (e.g. from registration).
-- **Returns:** `{ signerId: number; nextNonce: number }`. Sends `Authorization` when a JWT is present.
+  - `idOrPubkeyOrAddress` — Any identifier accepted by `GET /api/registry/entry/{pubkey_or_id}`:
+    - a numeric Kontor `signer_id` (e.g. `"0"`),
+    - an x-only public key in hex (64 hex chars), or
+    - a Bitcoin address registered with the Portal (via `register()` or node registration).
+- **Returns:** `{ signerId: number; nextNonce: number }`. Sends `Authorization` when a JWT is present. Throws `PortalNotFoundError` on 404 (e.g. address not registered).
 
 ### `uploadFile(file, options)`
 
