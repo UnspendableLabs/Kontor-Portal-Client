@@ -290,14 +290,26 @@ export class KontorPortalClient {
     };
   }
 
-  async getSignerInfo(xOnlyPubkey: string): Promise<SignerInfo> {
+  /**
+   * Look up signer info in the Portal registry.
+   *
+   * `idOrPubkeyOrAddress` accepts any of the three formats supported by
+   * `GET /api/registry/entry/{pubkey_or_id}`:
+   *   1. A numeric Kontor `signer_id` (e.g. `"0"`).
+   *   2. An x-only public key in hex (64 hex chars).
+   *   3. A Bitcoin address registered with the Portal.
+   *
+   * Throws {@link PortalNotFoundError} on 404 (registry entry / address not
+   * registered).
+   */
+  async getSignerInfo(idOrPubkeyOrAddress: string): Promise<SignerInfo> {
     const headers: HeadersInit = {};
     if (this.jwt) {
       headers["Authorization"] = `Bearer ${this.jwt}`;
     }
 
     const res = await fetch(
-      `${this.portalHost}/api/registry/entry/${encodeURIComponent(xOnlyPubkey)}`,
+      `${this.portalHost}/api/registry/entry/${encodeURIComponent(idOrPubkeyOrAddress)}`,
       { headers },
     );
 
