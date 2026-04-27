@@ -15,7 +15,6 @@ import type { KontorPortalClientConfig } from "./types";
 export type PortalAuthStatus =
   | "loading"
   | "authenticated"
-  | "needs_registration"
   | "needs_login"
   | "logging_in"
   | "error";
@@ -44,13 +43,6 @@ interface PortalClientContextValue {
   login: () => Promise<void>;
   logout: () => void;
   reset: () => void;
-  saveRegistration: (data: {
-    portalUserId: string;
-    taprootAddress: string;
-    xpubkey: string;
-    xOnlyPubkey: string;
-    blsPubkey: string;
-  }) => void;
 }
 
 const PortalClientContext = createContext<PortalClientContextValue | null>(null);
@@ -107,74 +99,58 @@ export function PortalClientProvider({
       if (client.isAuthenticated()) {
         setJwt(storedJwt);
         setStatus("authenticated");
-      } else {
-        localStorage.removeItem(STORAGE_KEYS.jwt);
-        setStatus(storedUserId ? "needs_login" : "needs_registration");
+        return;
       }
-    } else {
-      setStatus(storedUserId ? "needs_login" : "needs_registration");
+      localStorage.removeItem(STORAGE_KEYS.jwt);
     }
+    setStatus("needs_login");
   }, [client]);
 
   const login = useCallback(async () => {
-    if (!portalUserId) {
-      setError("No portal user ID — register first");
-      setStatus("error");
-      return;
-    }
-    if (!taprootAddress) {
-      setError("No taproot address — register first");
-      setStatus("error");
-      return;
-    }
-
     setStatus("logging_in");
     setError(null);
-
     try {
-      const result = await client.login(portalUserId, taprootAddress);
+      const result = await client.login(
+        taprootAddress ? { address: taprootAddress } : {},
+      );
+
+      if (taprootAddress !== result.address) {
+        localStorage.setItem(STORAGE_KEYS.taprootAddress, result.address);
+        setTaprootAddress(result.address);
+      }
+
+      if (result.registration) {
+        const reg = result.registration;
+        localStorage.setItem(STORAGE_KEYS.userId, reg.userId);
+        localStorage.setItem(STORAGE_KEYS.xpubkey, reg.xpubkey);
+        localStorage.setItem(STORAGE_KEYS.xOnlyPubkey, reg.xOnlyPubkey);
+        localStorage.setItem(STORAGE_KEYS.blsPubkey, reg.blsPubkey);
+        setPortalUserId(reg.userId);
+        setXpubkey(reg.xpubkey);
+        setXOnlyPubkey(reg.xOnlyPubkey);
+        setBlsPubkey(reg.blsPubkey);
+      } else if (!portalUserId) {
+        localStorage.setItem(STORAGE_KEYS.userId, result.userId);
+        setPortalUserId(result.userId);
+      }
+
       localStorage.setItem(STORAGE_KEYS.jwt, result.jwt);
       setJwt(result.jwt);
       setStatus("authenticated");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Login failed";
+      const message = err instanceof Error ? err.message : "Login failed";
       setError(message);
       setStatus("error");
     }
-  }, [client, portalUserId, taprootAddress]);
+  }, [client, taprootAddress, portalUserId]);
 
   const logout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEYS.jwt);
     client.clearJwt();
     setJwt(null);
     setError(null);
-    setStatus(portalUserId ? "needs_login" : "needs_registration");
-  }, [client, portalUserId]);
-
-  const saveRegistration = useCallback(
-    (data: {
-      portalUserId: string;
-      taprootAddress: string;
-      xpubkey: string;
-      xOnlyPubkey: string;
-      blsPubkey: string;
-    }) => {
-      localStorage.setItem(STORAGE_KEYS.userId, data.portalUserId);
-      localStorage.setItem(STORAGE_KEYS.taprootAddress, data.taprootAddress);
-      localStorage.setItem(STORAGE_KEYS.xpubkey, data.xpubkey);
-      localStorage.setItem(STORAGE_KEYS.xOnlyPubkey, data.xOnlyPubkey);
-      localStorage.setItem(STORAGE_KEYS.blsPubkey, data.blsPubkey);
-
-      setPortalUserId(data.portalUserId);
-      setTaprootAddress(data.taprootAddress);
-      setXpubkey(data.xpubkey);
-      setXOnlyPubkey(data.xOnlyPubkey);
-      setBlsPubkey(data.blsPubkey);
-      setStatus("needs_login");
-    },
-    [],
-  );
+    setStatus("needs_login");
+  }, [client]);
 
   const reset = useCallback(() => {
     for (const key of Object.values(STORAGE_KEYS)) {
@@ -188,7 +164,7 @@ export function PortalClientProvider({
     setXOnlyPubkey(null);
     setBlsPubkey(null);
     setError(null);
-    setStatus("needs_registration");
+    setStatus("needs_login");
   }, [client]);
 
   const value = useMemo<PortalClientContextValue>(
@@ -207,9 +183,8 @@ export function PortalClientProvider({
       login,
       logout,
       reset,
-      saveRegistration,
     }),
-    [client, status, jwt, error, portalUserId, taprootAddress, xpubkey, xOnlyPubkey, blsPubkey, login, logout, reset, saveRegistration],
+    [client, status, jwt, error, portalUserId, taprootAddress, xpubkey, xOnlyPubkey, blsPubkey, login, logout, reset],
   );
 
   return (

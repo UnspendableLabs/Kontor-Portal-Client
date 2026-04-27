@@ -1,6 +1,6 @@
 {
   "name": "@unspendablelabs/kontor-portal-client",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "TypeScript client for Kontor Portal — BLS registration, challenge login, and chunked file upload",
   "license": "MIT",
@@ -42,7 +42,7 @@
   },
   "peerDependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",
-    "@kontor/kontor-crypto": "^0.2.0-alpha",
+    "@kontor/kontor-crypto": "^0.2.0",
     "bip32": "^5.0.0-rc.0",
     "bitcoinjs-lib": "^7.0.0-rc.0",
     "react": ">=18"

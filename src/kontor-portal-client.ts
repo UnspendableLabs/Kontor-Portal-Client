@@ -1,4 +1,5 @@
 import {
+  NetworkMismatchError,
   PortalNotFoundError,
   type KontorPortalClientConfig,
   type BLSSigner,
@@ -9,6 +10,8 @@ import {
   type LoginResult,
   type LoginOptions,
   type SignerInfo,
+  type UnifiedLoginOptions,
+  type UnifiedLoginResult,
   type UploadResult,
   type UploadOptions,
   type Agreement,
@@ -16,6 +19,7 @@ import {
   type ListAgreementsOptions,
   type DownloadFileOptions,
   type DownloadUrlResult,
+  type WalletNetwork,
 } from "./types";
 import {
   buildRegistrationMessage,
@@ -57,6 +61,7 @@ export class KontorPortalClient {
   private readonly portalHost: string;
   private readonly kontorContractAddress: string;
   private readonly network: Network;
+  private readonly walletNetwork: WalletNetwork;
   private readonly validationDelayMs: number;
   private readonly signer: BLSSigner;
   private readonly crypto: KontorCryptoProvider;
@@ -68,12 +73,44 @@ export class KontorPortalClient {
     this.kontorContractAddress =
       config.kontorContractAddress ?? DEFAULT_CONTRACT;
     this.network = config.network ?? networks.testnet;
+    this.walletNetwork =
+      config.walletNetwork ??
+      KontorPortalClient.toWalletNetwork(this.network);
     this.validationDelayMs = config.validationDelayMs ?? 2000;
     this.signer = config.signer ?? new HorizonWalletSigner();
     this.crypto =
       config.crypto ??
       (config.wasmUrl ? createCryptoProvider(config.wasmUrl) : { prepareFile });
     this.nonceProvider = config.nonceProvider ?? new InMemoryNonceProvider();
+  }
+
+  /**
+   * Maps a bitcoinjs-lib `Network` object to a wallet-side `WalletNetwork`
+   * string. bitcoinjs-lib does not differentiate testnet3/testnet4/signet,
+   * so we default the testnet branch to `"signet"`. Override with
+   * `config.walletNetwork` to target `"testnet4"` explicitly.
+   */
+  private static toWalletNetwork(net: Network): WalletNetwork {
+    if (net === networks.bitcoin) return "mainnet";
+    return "signet";
+  }
+
+  /**
+   * Reads the wallet's current network via `signer.getAddress()` and reports
+   * whether it matches the client's configured `walletNetwork`. Useful for
+   * surfacing a clear error to the user before initiating a login flow.
+   */
+  async detectWalletNetwork(): Promise<{
+    walletNetwork: WalletNetwork;
+    clientNetwork: WalletNetwork;
+    matches: boolean;
+  }> {
+    const { network: walletNetwork } = await this.signer.getAddress();
+    return {
+      walletNetwork,
+      clientNetwork: this.walletNetwork,
+      matches: walletNetwork === this.walletNetwork,
+    };
   }
 
   private requireJwt(): string {
@@ -154,7 +191,7 @@ export class KontorPortalClient {
     }
   }
 
-  async register(
+  private async registerInternal(
     taprootAddress: string,
     options?: RegisterOptions,
   ): Promise<RegistrationResult> {
@@ -218,7 +255,65 @@ export class KontorPortalClient {
     return { userId, xOnlyPubkey, blsPubkey, xpubkey: pop.xpubkey };
   }
 
-  async login(
+  /**
+   * Unified login: detects whether the wallet is registered with the Portal
+   * and either logs in directly or performs registration first.
+   *
+   * - With no arguments, calls `signer.getAddress()` (validating the wallet
+   *   network against the client's configured `walletNetwork`) and runs the
+   *   full flow.
+   * - With `options.address`, skips `getAddress()` and the network check.
+   *
+   * Returns a {@link UnifiedLoginResult} where `registration` is non-null on
+   * the new-user path. `result.address` is always populated with the address
+   * actually used for login.
+   */
+  async login(options?: UnifiedLoginOptions): Promise<UnifiedLoginResult> {
+    let address = options?.address;
+
+    if (!address) {
+      options?.onStep?.("checking_wallet");
+      const { address: walletAddress, network: walletNetwork } =
+        await this.signer.getAddress();
+      if (walletNetwork !== this.walletNetwork) {
+        throw new NetworkMismatchError(walletNetwork, this.walletNetwork);
+      }
+      address = walletAddress;
+    }
+
+    // Narrow scope: only the registry lookup decides the register-vs-login
+    // branch. Errors from the subsequent loginWithUserId/registerInternal
+    // calls must propagate as-is — never silently fall through to register.
+    options?.onStep?.("checking_registration");
+    let existingUserId: string | null = null;
+    try {
+      const info = await this.getSignerInfo(address);
+      if (info.userId) {
+        existingUserId = info.userId;
+      }
+    } catch (err) {
+      if (!(err instanceof PortalNotFoundError)) throw err;
+    }
+
+    if (existingUserId !== null) {
+      const loginResult = await this.loginWithUserId(
+        existingUserId,
+        address,
+        options,
+      );
+      return { ...loginResult, address, registration: null };
+    }
+
+    const registration = await this.registerInternal(address, options);
+    const loginResult = await this.loginWithUserId(
+      registration.userId,
+      address,
+      options,
+    );
+    return { ...loginResult, address, registration };
+  }
+
+  private async loginWithUserId(
     userId: string,
     address: string,
     options?: LoginOptions,
@@ -323,6 +418,7 @@ export class KontorPortalClient {
     const data = (await res.json()) as {
       signer_id: number;
       next_nonce: number;
+      user_id?: string;
     };
 
     const effectiveNonce = await this.nonceProvider.getNextNonce(
@@ -330,7 +426,11 @@ export class KontorPortalClient {
       data.next_nonce,
     );
 
-    return { signerId: data.signer_id, nextNonce: effectiveNonce };
+    return {
+      signerId: data.signer_id,
+      nextNonce: effectiveNonce,
+      userId: data.user_id,
+    };
   }
 
   async uploadFile(

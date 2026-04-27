@@ -47,6 +47,7 @@ import { networks } from "bitcoinjs-lib";
 const client = new KontorPortalClient({
   portalHost: "https://portal.example.com",
   network: networks.bitcoin, // default: signet (testnet)
+  walletNetwork: "mainnet", // default: derived from `network` (mainnet | signet)
   kontorContractAddress: "my_contract", // default: "filestorage_0_0"
   // signer: myCustomSigner, // default: new HorizonWalletSigner()
   // crypto: myCustomCrypto, // default: WASM via @kontor/kontor-crypto
@@ -55,25 +56,36 @@ const client = new KontorPortalClient({
 });
 ```
 
+### `walletNetwork`
+
+`walletNetwork` is the wallet-side network identifier (`"mainnet"`, `"testnet4"`, or `"signet"`) that the client expects from the connected wallet. When omitted, it is derived from `network`:
+
+| `network`              | Derived `walletNetwork` |
+| ---------------------- | ----------------------- |
+| `networks.bitcoin`     | `"mainnet"`             |
+| anything else (default `networks.testnet`) | `"signet"` |
+
+Set `walletNetwork: "testnet4"` explicitly when targeting testnet4 — bitcoinjs-lib's `networks.testnet` covers testnet3/testnet4/signet (same bech32 parameters), so the default mapping cannot disambiguate.
+
 ## Quick start
 
-Full flow: register, log in, then upload. Each step supports optional progress callbacks.
+The unified `login()` method auto-detects whether the wallet is registered with the Portal and runs registration on the fly when needed. Each step supports optional progress callbacks.
 
 ```typescript
-// Register
-const reg = await client.register("bc1p...", {
-  onStep: (step) => console.log("Register step:", step),
-});
-
-// Login
-const { jwt } = await client.login(reg.userId, "bc1p...", {
+// One call: register if needed + login. Returns the JWT and (when the user
+// was just registered) the registration data. The JWT is also stored on the
+// client for subsequent authenticated requests.
+const result = await client.login({
   onStep: (step) => console.log("Login step:", step),
 });
 
+if (result.registration) {
+  console.log("Registered new user:", result.registration.userId);
+}
+
 // Upload a file
-const result = await client.uploadFile(file, {
-  xOnlyPubkey: reg.xOnlyPubkey,
-  address: "bc1p...",
+const uploadResult = await client.uploadFile(file, {
+  xOnlyPubkey: result.registration?.xOnlyPubkey ?? "<stored xOnlyPubkey>",
   tags: ["document", "contract"],
   onStep: (step) => console.log("Upload step:", step),
   onPrepareProgress: (progress, phase) => {
@@ -87,26 +99,53 @@ const result = await client.uploadFile(file, {
 
 `uploadFile` requires a prior successful `login()` (or a JWT set with `setJwt`) because uploads use authenticated portal APIs.
 
+### Network validation
+
+`login()` calls `signer.getAddress()` and validates the wallet's reported network against `walletNetwork`. On mismatch it throws `NetworkMismatchError` before any Portal request:
+
+```typescript
+import { NetworkMismatchError } from "@unspendablelabs/kontor-portal-client";
+
+try {
+  await client.login();
+} catch (err) {
+  if (err instanceof NetworkMismatchError) {
+    console.error(
+      `Wallet on ${err.walletNetwork}, client expects ${err.clientNetwork}.`,
+    );
+  }
+}
+```
+
+You can also probe the wallet network without triggering a login flow:
+
+```typescript
+const { walletNetwork, clientNetwork, matches } =
+  await client.detectWalletNetwork();
+```
+
+If you already know the address and want to skip the wallet round-trip (and the network check), pass `address` directly:
+
+```typescript
+await client.login({ address: "bc1p..." });
+```
+
 ## API reference
 
-### `register(taprootAddress, options?)`
+### `login(options?)`
 
-- **Signature:** `register(taprootAddress: string, options?: RegisterOptions): Promise<RegistrationResult>`
-- **Description:** Fetches a BLS proof-of-possession from the signer, builds the registration payload, signs it with BLS, and POSTs to the portal. Does not set a JWT.
+- **Signature:** `login(options?: UnifiedLoginOptions): Promise<UnifiedLoginResult>`
+- **Description:** Unified flow that detects whether the wallet is registered with the Portal and either logs in directly or runs registration first. Stores the resulting JWT on the client.
 - **Parameters:**
-  - `taprootAddress` — Taproot address passed to the signer for PoP.
-  - `options?.onStep` — Called with register step names (see [Progress callbacks](#progress-callbacks)).
-- **Returns:** `RegistrationResult` with `userId`, `xOnlyPubkey`, `blsPubkey`, and `xpubkey`.
+  - `options?.address` — Taproot address. When omitted, the signer's `getAddress()` is called and the returned network is validated against the client's configured `walletNetwork`.
+  - `options?.onStep` — Called with `UnifiedLoginStep` names (see [Progress callbacks](#progress-callbacks)).
+- **Returns:** `UnifiedLoginResult` extending `LoginResult` with `address` and `registration` fields. `address` is the Taproot address used for the login (either `options.address` or the wallet-resolved address). `registration` is `null` when the user was already registered, or a `RegistrationResult` (`userId`, `xOnlyPubkey`, `blsPubkey`, `xpubkey`) when a registration was performed during this call.
+- **Throws:** `NetworkMismatchError` when the wallet network does not match the client's configured `walletNetwork` (only when `options.address` is omitted).
 
-### `login(userId, address, options?)`
+### `detectWalletNetwork()`
 
-- **Signature:** `login(userId: string, address: string, options?: LoginOptions): Promise<LoginResult>`
-- **Description:** Fetches a challenge, signs it with BLS (HTTP SIG domain), POSTs credentials, and stores the returned JWT on the client.
-- **Parameters:**
-  - `userId` — User id returned from registration.
-  - `address` — Taproot address used for BLS key derivation.
-  - `options?.onStep` — Called with login step names.
-- **Returns:** `LoginResult` with `jwt`, `userId`, optional `role`, and optional `expiresIn` (seconds until JWT expiry, derived from the token when possible).
+- **Signature:** `detectWalletNetwork(): Promise<{ walletNetwork: WalletNetwork; clientNetwork: WalletNetwork; matches: boolean }>`
+- **Description:** Calls `signer.getAddress()` and reports whether the wallet's network matches the client's configured `walletNetwork`. Useful for surfacing a clear error to the user before initiating a login flow.
 
 ### `getSignerInfo(idOrPubkeyOrAddress)`
 
@@ -116,8 +155,8 @@ const result = await client.uploadFile(file, {
   - `idOrPubkeyOrAddress` — Any identifier accepted by `GET /api/registry/entry/{pubkey_or_id}`:
     - a numeric Kontor `signer_id` (e.g. `"0"`),
     - an x-only public key in hex (64 hex chars), or
-    - a Bitcoin address registered with the Portal (via `register()` or node registration).
-- **Returns:** `{ signerId: number; nextNonce: number }`. Sends `Authorization` when a JWT is present. Throws `PortalNotFoundError` on 404 (e.g. address not registered).
+    - a Bitcoin address registered with the Portal (via `login()` or node registration).
+- **Returns:** `SignerInfo` — `{ signerId: number; nextNonce: number; userId?: string }`. `userId` is present when the registry entry resolves to a `users` row (lookup by Bitcoin address or x-only pubkey of a registered user). Sends `Authorization` when a JWT is present. Throws `PortalNotFoundError` on 404 (e.g. address not registered).
 
 ### `uploadFile(file, options)`
 
@@ -201,9 +240,11 @@ const url = URL.createObjectURL(blob);
 
 | Flow | Steps |
 |------|--------|
-| Register | `"pop"` → `"signing"` → `"registering"` |
-| Login | `"challenge"` → `"signing"` → `"authenticating"` |
+| Login (already registered) | `"checking_wallet"` → `"checking_registration"` → `"challenge"` → `"signing"` → `"authenticating"` |
+| Login (new user) | `"checking_wallet"` → `"checking_registration"` → `"pop"` → `"signing"` → `"registering"` → `"challenge"` → `"signing"` → `"authenticating"` |
 | Upload | `"preparing"` → `"signing"` → `"initiating"` → `"uploading"` → `"validating"` |
+
+> **Note:** the login flow skips `"checking_wallet"` when `options.address` is supplied (the signer's `getAddress()` is not called and the network check is bypassed).
 
 **`onPrepareProgress(progress, phase)`** — Passed through to `KontorCryptoProvider.prepareFile`. `progress` is in the inclusive range **0–1**. `phase` is a `ProgressPhase` from kontor-crypto: `"reading"`, `"encoding"`, `"merkle"`, or `"finalizing"`.
 
@@ -214,9 +255,17 @@ const url = URL.createObjectURL(blob);
 ### `BLSSigner` (no Horizon Wallet)
 
 ```typescript
-import type { BLSSigner, BLSPoP, BLSSignParams } from "@unspendablelabs/kontor-portal-client";
+import type {
+  BLSSigner,
+  BLSPoP,
+  BLSSignParams,
+  WalletAddress,
+} from "@unspendablelabs/kontor-portal-client";
 
 class MyCustomSigner implements BLSSigner {
+  async getAddress(): Promise<WalletAddress> {
+    /* return { address: "bc1p...", network: "mainnet" | "testnet4" | "signet" } */
+  }
   async getBLSPoP(address: string): Promise<BLSPoP> {
     /* return xpubkey, blsPubkey, schnorrSig, blsSig */
   }
@@ -227,6 +276,8 @@ class MyCustomSigner implements BLSSigner {
 ```
 
 `BLSSignParams`: supply either `message` (UTF-8) or `messageHex`, not both, plus `dst` (domain separation tag). `address` (optional) identifies the account whose BLS key should sign.
+
+> **Breaking change in v0.2.0:** `BLSSigner` now requires a `getAddress()` method. The unified `login()` calls it to obtain the active Taproot address and to validate the wallet's network against the client's configured `walletNetwork`.
 
 ### `KontorCryptoProvider`
 
@@ -294,15 +345,14 @@ function MyComponent() {
     portalUserId,
     taprootAddress,
     xOnlyPubkey,
-    login,           // () => Promise<void>
+    login,           // () => Promise<void> — register-if-needed + login
     logout,          // () => void
-    saveRegistration,// (data) => void — persist registration result
     reset,           // () => void — clear all stored state
   } = usePortalClient();
 }
 ```
 
-`PortalAuthStatus` is one of `"loading"` | `"authenticated"` | `"needs_registration"` | `"needs_login"` | `"logging_in"` | `"error"`.
+`PortalAuthStatus` is one of `"loading"` | `"authenticated"` | `"needs_login"` | `"logging_in"` | `"error"`. `login()` handles registration on demand, so there is no separate `"needs_registration"` state.
 
 ## WASM crypto setup
 

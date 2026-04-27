@@ -4,7 +4,22 @@ import type {
   BLSSignParams,
   HorizonWalletProviderLike,
   HorizonWalletRpcResponse,
+  WalletAddress,
+  WalletNetwork,
 } from "./types";
+
+const VALID_WALLET_NETWORKS: readonly WalletNetwork[] = [
+  "mainnet",
+  "testnet4",
+  "signet",
+];
+
+function isWalletNetwork(value: unknown): value is WalletNetwork {
+  return (
+    typeof value === "string" &&
+    (VALID_WALLET_NETWORKS as readonly string[]).includes(value)
+  );
+}
 
 export class HorizonWalletSigner implements BLSSigner {
   private readonly timeoutMs: number;
@@ -45,6 +60,36 @@ export class HorizonWalletSigner implements BLSSigner {
       throw new Error(message);
     }
     return response.result as T;
+  }
+
+  async getAddress(): Promise<WalletAddress> {
+    const provider = this.getProvider();
+    const response = await this.withTimeout(
+      provider.request("getAddresses"),
+      "Horizon Wallet did not respond. Try disabling and re-enabling the extension, then refresh the page.",
+    );
+    const result = this.extractResult<{
+      network?: unknown;
+      addresses?: { address?: unknown; type?: unknown }[];
+    }>(response);
+
+    if (result == null || typeof result !== "object") {
+      throw new Error("Wallet did not return address data");
+    }
+
+    const network = result.network;
+    if (!isWalletNetwork(network)) {
+      throw new Error("Wallet did not return a valid network");
+    }
+
+    const taproot = (result.addresses ?? []).find(
+      (a) => a?.type === "p2tr" && typeof a?.address === "string" && a.address,
+    );
+    if (!taproot || typeof taproot.address !== "string" || !taproot.address) {
+      throw new Error("Wallet did not return a Taproot (p2tr) address");
+    }
+
+    return { address: taproot.address, network };
   }
 
   async getBLSPoP(address: string): Promise<BLSPoP> {

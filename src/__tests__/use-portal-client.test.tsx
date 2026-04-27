@@ -6,7 +6,7 @@ import type { KontorPortalClientConfig } from "../types";
 import { createMockSigner } from "./helpers/mock-signer";
 import { createMockCrypto } from "./helpers/mock-crypto";
 import { createMockFetch } from "./helpers/mock-fetch";
-import { PORTAL_HOST, makeJwt, makeExpiredJwt } from "./helpers/fixtures";
+import { PORTAL_HOST, makeJwt, makeExpiredJwt, POP } from "./helpers/fixtures";
 
 function createMockLocalStorage() {
   const store = new Map<string, string>();
@@ -63,14 +63,14 @@ describe("usePortalClient", () => {
     }).toThrow("usePortalClient must be used within a PortalClientProvider");
   });
 
-  it("starts with needs_registration when no stored data", async () => {
+  it("starts with needs_login when no stored data (unified flow)", async () => {
     const config = makeConfig();
     const { result } = renderHook(() => usePortalClient(), {
       wrapper: wrapper(config),
     });
 
     await vi.waitFor(() => {
-      expect(result.current.status).toBe("needs_registration");
+      expect(result.current.status).toBe("needs_login");
     });
     expect(result.current.jwt).toBeNull();
     expect(result.current.isRegistered).toBe(false);
@@ -108,7 +108,7 @@ describe("usePortalClient", () => {
     expect(result.current.jwt).toBeNull();
   });
 
-  it("falls back to needs_registration when expired JWT and no user", async () => {
+  it("falls back to needs_login when expired JWT and no user", async () => {
     mockStorage.setItem("portal_jwt", makeExpiredJwt());
 
     const config = makeConfig();
@@ -117,7 +117,7 @@ describe("usePortalClient", () => {
     });
 
     await vi.waitFor(() => {
-      expect(result.current.status).toBe("needs_registration");
+      expect(result.current.status).toBe("needs_login");
     });
   });
 
@@ -135,7 +135,7 @@ describe("usePortalClient", () => {
   });
 
   describe("login", () => {
-    it("transitions through logging_in to authenticated", async () => {
+    it("transitions through logging_in to authenticated (already registered)", async () => {
       mockStorage.setItem("portal_user_id", "user-1");
       mockStorage.setItem("portal_taproot_address", "tb1addr");
 
@@ -157,27 +157,49 @@ describe("usePortalClient", () => {
       expect(mockStorage.getItem("portal_jwt")).toBeTruthy();
     });
 
-    it("sets error when no user ID", async () => {
+    it("auto-registers and persists registration data on first login", async () => {
+      let firstCall = true;
+      mockFetch = createMockFetch({
+        registryEntry: () => {
+          if (firstCall) {
+            firstCall = false;
+            return new Response("Not Found", { status: 404 });
+          }
+          return new Response(
+            JSON.stringify({
+              signer_id: 42,
+              next_nonce: 5,
+              user_id: "user-1",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        },
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
       const config = makeConfig();
       const { result } = renderHook(() => usePortalClient(), {
         wrapper: wrapper(config),
       });
 
       await vi.waitFor(() => {
-        expect(result.current.status).not.toBe("loading");
+        expect(result.current.status).toBe("needs_login");
       });
+      expect(result.current.isRegistered).toBe(false);
 
       await act(async () => {
         await result.current.login();
       });
 
-      expect(result.current.status).toBe("error");
-      expect(result.current.error).toContain("register first");
+      expect(result.current.status).toBe("authenticated");
+      expect(result.current.isRegistered).toBe(true);
+      expect(result.current.portalUserId).toBe("user-1");
+      expect(result.current.xpubkey).toBe(POP.xpubkey);
+      expect(mockStorage.getItem("portal_user_id")).toBe("user-1");
+      expect(mockStorage.getItem("portal_xpubkey")).toBe(POP.xpubkey);
     });
 
-    it("sets error when user ID exists but no taproot address", async () => {
-      mockStorage.setItem("portal_user_id", "user-1");
-
+    it("persists userId from login result when not previously stored", async () => {
       const config = makeConfig();
       const { result } = renderHook(() => usePortalClient(), {
         wrapper: wrapper(config),
@@ -191,8 +213,90 @@ describe("usePortalClient", () => {
         await result.current.login();
       });
 
-      expect(result.current.status).toBe("error");
-      expect(result.current.error).toContain("taproot address");
+      expect(result.current.status).toBe("authenticated");
+      expect(result.current.portalUserId).toBe("user-1");
+      expect(mockStorage.getItem("portal_user_id")).toBe("user-1");
+    });
+
+    it("uses stored taproot address as the explicit address override", async () => {
+      mockStorage.setItem("portal_taproot_address", "tb1stored");
+
+      const signer = createMockSigner();
+      const config = makeConfig({ signer });
+      const { result } = renderHook(() => usePortalClient(), {
+        wrapper: wrapper(config),
+      });
+
+      await vi.waitFor(() => {
+        expect(result.current.status).toBe("needs_login");
+      });
+
+      await act(async () => {
+        await result.current.login();
+      });
+
+      expect(result.current.status).toBe("authenticated");
+      expect(signer.getAddress).not.toHaveBeenCalled();
+    });
+
+    it("persists wallet-resolved taprootAddress when none was stored", async () => {
+      const signer = createMockSigner({ address: "tb1pwallet" });
+      const config = makeConfig({ signer });
+      const { result } = renderHook(() => usePortalClient(), {
+        wrapper: wrapper(config),
+      });
+
+      await vi.waitFor(() => {
+        expect(result.current.status).toBe("needs_login");
+      });
+      expect(result.current.taprootAddress).toBeNull();
+
+      await act(async () => {
+        await result.current.login();
+      });
+
+      expect(result.current.status).toBe("authenticated");
+      expect(result.current.taprootAddress).toBe("tb1pwallet");
+      expect(mockStorage.getItem("portal_taproot_address")).toBe("tb1pwallet");
+    });
+
+    it("persists taprootAddress on auto-register path", async () => {
+      let firstCall = true;
+      mockFetch = createMockFetch({
+        registryEntry: () => {
+          if (firstCall) {
+            firstCall = false;
+            return new Response("Not Found", { status: 404 });
+          }
+          return new Response(
+            JSON.stringify({
+              signer_id: 42,
+              next_nonce: 5,
+              user_id: "user-1",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        },
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const signer = createMockSigner({ address: "tb1pnewuser" });
+      const config = makeConfig({ signer });
+      const { result } = renderHook(() => usePortalClient(), {
+        wrapper: wrapper(config),
+      });
+
+      await vi.waitFor(() => {
+        expect(result.current.status).toBe("needs_login");
+      });
+
+      await act(async () => {
+        await result.current.login();
+      });
+
+      expect(result.current.status).toBe("authenticated");
+      expect(result.current.taprootAddress).toBe("tb1pnewuser");
+      expect(mockStorage.getItem("portal_taproot_address")).toBe("tb1pnewuser");
     });
 
     it("handles login failure", async () => {
@@ -250,40 +354,8 @@ describe("usePortalClient", () => {
     });
   });
 
-  describe("saveRegistration", () => {
-    it("stores registration data and transitions to needs_login", async () => {
-      const config = makeConfig();
-      const { result } = renderHook(() => usePortalClient(), {
-        wrapper: wrapper(config),
-      });
-
-      await vi.waitFor(() => {
-        expect(result.current.status).toBe("needs_registration");
-      });
-
-      act(() => {
-        result.current.saveRegistration({
-          portalUserId: "user-42",
-          taprootAddress: "tb1addr-test",
-          xpubkey: "xpub-test",
-          xOnlyPubkey: "xonly-test",
-          blsPubkey: "bls-test",
-        });
-      });
-
-      expect(result.current.status).toBe("needs_login");
-      expect(result.current.portalUserId).toBe("user-42");
-      expect(result.current.taprootAddress).toBe("tb1addr-test");
-      expect(result.current.xpubkey).toBe("xpub-test");
-      expect(result.current.xOnlyPubkey).toBe("xonly-test");
-      expect(result.current.blsPubkey).toBe("bls-test");
-      expect(result.current.isRegistered).toBe(true);
-      expect(mockStorage.getItem("portal_user_id")).toBe("user-42");
-    });
-  });
-
   describe("reset", () => {
-    it("clears all state and storage", async () => {
+    it("clears all state and storage and goes to needs_login", async () => {
       mockStorage.setItem("portal_user_id", "user-1");
       mockStorage.setItem("portal_jwt", makeJwt());
       mockStorage.setItem("portal_taproot_address", "tb1addr");
@@ -304,7 +376,7 @@ describe("usePortalClient", () => {
         result.current.reset();
       });
 
-      expect(result.current.status).toBe("needs_registration");
+      expect(result.current.status).toBe("needs_login");
       expect(result.current.jwt).toBeNull();
       expect(result.current.portalUserId).toBeNull();
       expect(result.current.taprootAddress).toBeNull();
