@@ -3,7 +3,7 @@ export {
   InMemoryNonceProvider,
 } from "./kontor-portal-client";
 export { HorizonWalletSigner } from "./horizon-wallet-signer";
-export { PortalNotFoundError } from "./types";
+export { NetworkMismatchError, PortalNotFoundError } from "./types";
 
 export type {
   BLSSigner,
@@ -12,15 +12,14 @@ export type {
   KontorCryptoProvider,
   NonceProvider,
   KontorPortalClientConfig,
-  RegisterStep,
-  LoginStep,
   UploadStep,
-  RegisterOptions,
-  LoginOptions,
   UploadOptions,
   RegistrationResult,
   LoginResult,
   SignerInfo,
+  UnifiedLoginStep,
+  UnifiedLoginOptions,
+  UnifiedLoginResult,
   UploadResult,
   Agreement,
   AgreementsResponse,
@@ -32,6 +31,8 @@ export type {
   OnProgress,
   HorizonWalletProviderLike,
   HorizonWalletRpcResponse,
+  WalletAddress,
+  WalletNetwork,
 } from "./types";
 
 export {

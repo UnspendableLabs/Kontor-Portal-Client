@@ -29,6 +29,106 @@ describe("HorizonWalletSigner", () => {
     });
   });
 
+  describe("getAddress", () => {
+    it("returns the first p2tr address with the wallet network", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({
+          result: {
+            id: "req-1",
+            network: "signet",
+            addresses: [
+              { address: "tb1q...", type: "p2wpkh", publicKey: "p1" },
+              { address: "tb1p...", type: "p2tr", publicKey: "p2" },
+              { address: "tb1p2...", type: "p2tr", publicKey: "p3" },
+            ],
+          },
+        }),
+      });
+
+      const signer = new HorizonWalletSigner();
+      const result = await signer.getAddress();
+      expect(result).toEqual({ address: "tb1p...", network: "signet" });
+    });
+
+    it("calls provider with getAddresses method (no params)", async () => {
+      const requestFn = vi.fn().mockResolvedValue({
+        result: {
+          network: "mainnet",
+          addresses: [{ address: "bc1p...", type: "p2tr" }],
+        },
+      });
+      installProvider({ request: requestFn });
+
+      const signer = new HorizonWalletSigner();
+      await signer.getAddress();
+      expect(requestFn).toHaveBeenCalledWith("getAddresses");
+    });
+
+    it("throws when no p2tr address is present", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({
+          result: {
+            network: "mainnet",
+            addresses: [{ address: "bc1q...", type: "p2wpkh" }],
+          },
+        }),
+      });
+      const signer = new HorizonWalletSigner();
+      await expect(signer.getAddress()).rejects.toThrow("Taproot");
+    });
+
+    it("throws when network is missing", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({
+          result: {
+            addresses: [{ address: "bc1p...", type: "p2tr" }],
+          },
+        }),
+      });
+      const signer = new HorizonWalletSigner();
+      await expect(signer.getAddress()).rejects.toThrow("valid network");
+    });
+
+    it("throws when network value is not one of the known strings", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({
+          result: {
+            network: "regtest",
+            addresses: [{ address: "bc1p...", type: "p2tr" }],
+          },
+        }),
+      });
+      const signer = new HorizonWalletSigner();
+      await expect(signer.getAddress()).rejects.toThrow("valid network");
+    });
+
+    it("throws when addresses array is empty", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({
+          result: { network: "signet", addresses: [] },
+        }),
+      });
+      const signer = new HorizonWalletSigner();
+      await expect(signer.getAddress()).rejects.toThrow("Taproot");
+    });
+
+    it("propagates wallet RPC errors", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({ error: "User rejected" }),
+      });
+      const signer = new HorizonWalletSigner();
+      await expect(signer.getAddress()).rejects.toThrow("User rejected");
+    });
+
+    it("times out", async () => {
+      installProvider({
+        request: () => new Promise(() => {}),
+      });
+      const signer = new HorizonWalletSigner(50);
+      await expect(signer.getAddress()).rejects.toThrow("did not respond");
+    });
+  });
+
   describe("getBLSPoP", () => {
     it("returns PoP on success", async () => {
       const pop = {

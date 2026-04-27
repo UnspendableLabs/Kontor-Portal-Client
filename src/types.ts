@@ -27,7 +27,26 @@ export interface BLSSignParams {
   address?: string;
 }
 
+/**
+ * Wallet-side network identifier as returned by Horizon Wallet
+ * (`getAddresses` RPC). This is a string, distinct from bitcoinjs-lib's
+ * structural `Network` object used by `KontorPortalClientConfig.network`.
+ */
+export type WalletNetwork = "mainnet" | "testnet4" | "signet";
+
+export interface WalletAddress {
+  address: string;
+  network: WalletNetwork;
+}
+
 export interface BLSSigner {
+  /**
+   * Returns the active Taproot (p2tr) address from the wallet along with the
+   * network the wallet is currently connected to. The client validates the
+   * returned `network` against its own configured `walletNetwork` and throws
+   * {@link NetworkMismatchError} on mismatch.
+   */
+  getAddress(): Promise<WalletAddress>;
   getBLSPoP(address: string): Promise<BLSPoP>;
   signBLS(params: BLSSignParams): Promise<string>;
 }
@@ -67,6 +86,13 @@ export interface KontorPortalClientConfig {
   kontorContractAddress?: string;
   /** Defaults to signet (`testnet` from bitcoinjs-lib). */
   network?: Network;
+  /**
+   * Expected wallet network (string). When omitted, derived from `network`
+   * (`networks.bitcoin` → `"mainnet"`, anything else → `"signet"`). Override
+   * this when targeting `"testnet4"`, since bitcoinjs-lib's `testnet` covers
+   * testnet3/testnet4/signet (same bech32 parameters).
+   */
+  walletNetwork?: WalletNetwork;
   /** Defaults to `new HorizonWalletSigner()`. */
   signer?: BLSSigner;
   /** Defaults to `{ prepareFile }` (WASM-based). */
@@ -126,6 +152,43 @@ export interface LoginResult {
 export interface SignerInfo {
   signerId: number;
   nextNonce: number;
+  /**
+   * Present when the registry entry resolves to a `users` row (lookup by
+   * Bitcoin address or x-only pubkey of a registered user). Absent when the
+   * resolved identifier corresponds to a non-user signer (e.g. a node).
+   */
+  userId?: string;
+}
+
+export type UnifiedLoginStep =
+  | "checking_wallet"
+  | "checking_registration"
+  | RegisterStep
+  | LoginStep;
+
+export interface UnifiedLoginOptions {
+  /**
+   * Optional Taproot address. When omitted, the signer's `getAddress()` is
+   * called (and the returned network is validated against the client's
+   * configured `walletNetwork`).
+   */
+  address?: string;
+  onStep?: (step: UnifiedLoginStep) => void;
+}
+
+export interface UnifiedLoginResult extends LoginResult {
+  /**
+   * Taproot address used for the login flow — either the value from
+   * `options.address` or the wallet-resolved address from
+   * `signer.getAddress()`. Always populated.
+   */
+  address: string;
+  /**
+   * `null` when the user was already registered. Populated with the
+   * registration data when this call also performed an automatic
+   * registration.
+   */
+  registration: RegistrationResult | null;
 }
 
 export interface UploadResult {
@@ -191,5 +254,17 @@ export class PortalNotFoundError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "PortalNotFoundError";
+  }
+}
+
+export class NetworkMismatchError extends Error {
+  constructor(
+    public readonly walletNetwork: WalletNetwork,
+    public readonly clientNetwork: WalletNetwork,
+  ) {
+    super(
+      `Wallet network "${walletNetwork}" does not match client network "${clientNetwork}"`,
+    );
+    this.name = "NetworkMismatchError";
   }
 }

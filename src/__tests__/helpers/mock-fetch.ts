@@ -92,7 +92,11 @@ export function createMockFetch(overrides: MockFetchOverrides = {}) {
       ) {
         return (
           overrides.registryEntry?.() ??
-          jsonResponse({ signer_id: 42, next_nonce: 5 })
+          jsonResponse({
+            signer_id: 42,
+            next_nonce: 5,
+            user_id: "user-1",
+          })
         );
       }
 

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { networks } from "bitcoinjs-lib";
 import {
   KontorPortalClient,
   InMemoryNonceProvider,
 } from "../kontor-portal-client";
-import { PortalNotFoundError } from "../types";
-import { createMockSigner } from "./helpers/mock-signer";
+import { NetworkMismatchError, PortalNotFoundError } from "../types";
+import { createMockSigner, MOCK_TAPROOT_ADDRESS } from "./helpers/mock-signer";
 import { createMockCrypto } from "./helpers/mock-crypto";
 import { createMockFetch, jsonResponse, textResponse } from "./helpers/mock-fetch";
 import {
@@ -136,173 +137,389 @@ describe("KontorPortalClient", () => {
     });
   });
 
-  describe("register", () => {
-    it("happy path: returns RegistrationResult", async () => {
-      const signer = createMockSigner();
-      const client = makeClient({ signer });
-
-      const result = await client.register("tb1addr");
-      expect(result.userId).toBe("user-1");
-      expect(result.xOnlyPubkey).toBe("ab".repeat(32));
-      expect(result.blsPubkey).toBe("cd".repeat(48));
-      expect(result.xpubkey).toBe(POP.xpubkey);
-    });
-
-    it("calls onStep in correct order", async () => {
-      const client = makeClient();
-      const steps: string[] = [];
-      await client.register("tb1addr", {
-        onStep: (s) => steps.push(s),
-      });
-      expect(steps).toEqual(["pop", "signing", "registering"]);
-    });
-
-    it("calls signer.getBLSPoP with the taproot address", async () => {
-      const signer = createMockSigner();
-      const client = makeClient({ signer });
-      await client.register("tb1myaddr");
-      expect(signer.getBLSPoP).toHaveBeenCalledWith("tb1myaddr");
-      expect(signer.signBLS).toHaveBeenCalledWith(
-        expect.objectContaining({ address: "tb1myaddr" }),
-      );
-    });
-
-    it("throws on 500 with portal unreachable message", async () => {
-      mockFetch = createMockFetch({
-        register: () => textResponse("Internal Server Error", 500),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      await expect(client.register("addr")).rejects.toThrow(
-        "Portal server is unreachable",
-      );
-    });
-
-    it("throws structured error from server", async () => {
-      mockFetch = createMockFetch({
-        register: () =>
-          jsonResponse(
-            { error: { code: "DUP", message: "Already registered" } },
-            409,
-          ),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      await expect(client.register("addr")).rejects.toThrow(
-        "Already registered",
-      );
-    });
-
-    it("throws on string error body", async () => {
-      mockFetch = createMockFetch({
-        register: () =>
-          jsonResponse({ error: "Bad key format" }, 400),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      await expect(client.register("addr")).rejects.toThrow("Bad key format");
-    });
-
-    it("throws on invalid response shape", async () => {
-      mockFetch = createMockFetch({
-        register: () => jsonResponse({ user_id: "u1" }),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      await expect(client.register("addr")).rejects.toThrow(
-        "missing required fields",
-      );
-    });
-  });
-
   describe("login", () => {
-    it("happy path: returns LoginResult and stores JWT", async () => {
-      const client = makeClient();
-      const result = await client.login("user-1", "tb1addr");
+    it("already-registered: skips registration and returns registration=null", async () => {
+      const signer = createMockSigner();
+      const client = makeClient({ signer });
+
+      const result = await client.login();
+
+      expect(result.registration).toBeNull();
       expect(result.jwt).toBeTruthy();
       expect(result.userId).toBe("user-1");
       expect(client.getJwt()).toBe(result.jwt);
       expect(client.isAuthenticated()).toBe(true);
+      expect(signer.getAddress).toHaveBeenCalledTimes(1);
+      expect(signer.getBLSPoP).not.toHaveBeenCalled();
     });
 
-    it("calls onStep in correct order", async () => {
-      const client = makeClient();
-      const steps: string[] = [];
-      await client.login("user-1", "tb1addr", { onStep: (s) => steps.push(s) });
-      expect(steps).toEqual(["challenge", "signing", "authenticating"]);
-    });
-
-    it("throws on challenge failure", async () => {
-      mockFetch = createMockFetch({
-        loginChallenge: () => textResponse("error", 500),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      await expect(client.login("user-1", "tb1addr")).rejects.toThrow(
-        "Failed to get challenge",
-      );
-    });
-
-    it("throws on invalid challenge response", async () => {
-      mockFetch = createMockFetch({
-        loginChallenge: () => jsonResponse({}),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      await expect(client.login("user-1", "tb1addr")).rejects.toThrow(
-        "Invalid challenge response",
-      );
-    });
-
-    it("throws on login failure with structured error", async () => {
-      mockFetch = createMockFetch({
-        loginPost: () =>
-          jsonResponse(
-            { error: { message: "Invalid signature" } },
-            401,
-          ),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      await expect(client.login("user-1", "tb1addr")).rejects.toThrow(
-        "Invalid signature",
-      );
-    });
-
-    it("throws on missing token in response", async () => {
-      mockFetch = createMockFetch({
-        loginPost: () => jsonResponse({ user_id: "u1" }),
-      });
-      vi.stubGlobal("fetch", mockFetch);
-      const client = makeClient();
-      await expect(client.login("user-1", "tb1addr")).rejects.toThrow("missing token");
-    });
-
-    it("signs challenge with correct DST and address", async () => {
+    it("already-registered: signs challenge with the wallet address", async () => {
       const signer = createMockSigner();
       const client = makeClient({ signer });
-      await client.login("user-1", "tb1addr");
+
+      await client.login();
+
       expect(signer.signBLS).toHaveBeenCalledWith({
         message: "challenge-hex-abc123",
         dst: "HORIZON_PORTAL_HTTP_SIG",
-        address: "tb1addr",
+        address: MOCK_TAPROOT_ADDRESS,
       });
     });
 
-    it("extracts role and expiresIn from JWT payload", async () => {
-      const exp = Math.floor(Date.now() / 1000) + 7200;
+    it("not-registered: auto-registers then logs in (registration is non-null)", async () => {
+      let registryCalls = 0;
       mockFetch = createMockFetch({
-        loginPost: () =>
-          jsonResponse({
-            token: makeJwt({ exp, role: "admin" }),
-            user_id: "user-1",
-          }),
+        registryEntry: () => {
+          registryCalls++;
+          return textResponse("Not Found", 404);
+        },
       });
       vi.stubGlobal("fetch", mockFetch);
+
+      const signer = createMockSigner();
+      const client = makeClient({ signer });
+      const result = await client.login();
+
+      expect(registryCalls).toBe(1);
+      expect(result.registration).not.toBeNull();
+      expect(result.registration?.userId).toBe("user-1");
+      expect(result.registration?.xpubkey).toBe(POP.xpubkey);
+      expect(result.jwt).toBeTruthy();
+      expect(client.isAuthenticated()).toBe(true);
+      expect(signer.getBLSPoP).toHaveBeenCalledWith(MOCK_TAPROOT_ADDRESS);
+    });
+
+    it("not-registered (missing user_id field): auto-registers", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () =>
+          jsonResponse({ signer_id: 1, next_nonce: 0 }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const signer = createMockSigner();
+      const client = makeClient({ signer });
+      const result = await client.login();
+
+      expect(result.registration).not.toBeNull();
+      expect(signer.getBLSPoP).toHaveBeenCalled();
+    });
+
+    it("with explicit address: skips signer.getAddress() entirely", async () => {
+      const signer = createMockSigner();
+      const client = makeClient({ signer });
+
+      const result = await client.login({ address: "tb1explicitaddr" });
+
+      expect(result.jwt).toBeTruthy();
+      expect(signer.getAddress).not.toHaveBeenCalled();
+      expect(signer.signBLS).toHaveBeenCalledWith(
+        expect.objectContaining({ address: "tb1explicitaddr" }),
+      );
+    });
+
+    it("calls onStep in correct order on the already-registered path", async () => {
       const client = makeClient();
-      const result = await client.login("user-1", "tb1addr");
-      expect(result.role).toBe("admin");
-      expect(result.expiresIn).toBeGreaterThan(7000);
+      const steps: string[] = [];
+      await client.login({ onStep: (s) => steps.push(s) });
+      expect(steps).toEqual([
+        "checking_wallet",
+        "checking_registration",
+        "challenge",
+        "signing",
+        "authenticating",
+      ]);
+    });
+
+    it("calls onStep in correct order on the auto-register path", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () => textResponse("Not Found", 404),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const client = makeClient();
+      const steps: string[] = [];
+      await client.login({ onStep: (s) => steps.push(s) });
+      expect(steps).toEqual([
+        "checking_wallet",
+        "checking_registration",
+        "pop",
+        "signing",
+        "registering",
+        "challenge",
+        "signing",
+        "authenticating",
+      ]);
+    });
+
+    it("with explicit address: omits checking_wallet step", async () => {
+      const client = makeClient();
+      const steps: string[] = [];
+      await client.login({ address: "tb1addr", onStep: (s) => steps.push(s) });
+      expect(steps).toEqual([
+        "checking_registration",
+        "challenge",
+        "signing",
+        "authenticating",
+      ]);
+    });
+
+    it("throws NetworkMismatchError when wallet network differs from client", async () => {
+      const signer = createMockSigner({ network: "mainnet" });
+      const client = makeClient({ signer });
+
+      const promise = client.login();
+      await expect(promise).rejects.toBeInstanceOf(NetworkMismatchError);
+
+      try {
+        await client.login();
+      } catch (err) {
+        const mismatch = err as NetworkMismatchError;
+        expect(mismatch.walletNetwork).toBe("mainnet");
+        expect(mismatch.clientNetwork).toBe("signet");
+        expect(mismatch.message).toContain("mainnet");
+        expect(mismatch.message).toContain("signet");
+      }
+
+      expect(signer.signBLS).not.toHaveBeenCalled();
+      expect(signer.getBLSPoP).not.toHaveBeenCalled();
+    });
+
+    it("network mismatch is bypassed when explicit address is provided", async () => {
+      const signer = createMockSigner({ network: "mainnet" });
+      const client = makeClient({ signer });
+
+      const result = await client.login({ address: "tb1explicit" });
+      expect(result.jwt).toBeTruthy();
+      expect(signer.getAddress).not.toHaveBeenCalled();
+    });
+
+    it("propagates non-404 registry errors without falling through to register", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () => textResponse("error", 500),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const signer = createMockSigner();
+      const client = makeClient({ signer });
+      await expect(client.login()).rejects.toThrow("Registry lookup failed");
+      expect(signer.getBLSPoP).not.toHaveBeenCalled();
+    });
+
+    it("propagates signer.getAddress() failure without touching the Portal", async () => {
+      const signer = createMockSigner();
+      signer.getAddress.mockRejectedValueOnce(new Error("User rejected"));
+      const client = makeClient({ signer });
+
+      await expect(client.login()).rejects.toThrow("User rejected");
+      expect(signer.signBLS).not.toHaveBeenCalled();
+      expect(signer.getBLSPoP).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(client.getJwt()).toBeNull();
+    });
+
+    it("does not leave a stale JWT when login fails after a successful register", async () => {
+      let registryCalls = 0;
+      mockFetch = createMockFetch({
+        registryEntry: () => {
+          registryCalls++;
+          return textResponse("Not Found", 404);
+        },
+        loginChallenge: () => textResponse("error", 500),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const client = makeClient();
+      await expect(client.login()).rejects.toThrow("Failed to get challenge");
+      expect(registryCalls).toBe(1);
+      expect(client.getJwt()).toBeNull();
+      expect(client.isAuthenticated()).toBe(false);
+    });
+
+    it("does not fall through to register when post-registry login throws PortalNotFoundError", async () => {
+      // Guard against future regressions: a PortalNotFoundError originating
+      // from loginWithUserId (e.g. user_id deleted between registry lookup
+      // and login) must NOT silently trigger the register flow. The
+      // try/catch around the registry lookup must not absorb errors from
+      // the subsequent loginWithUserId call.
+      const signer = createMockSigner();
+      const client = makeClient({ signer });
+      // Wrap loginWithUserId on the prototype to simulate a downstream
+      // PortalNotFoundError after the registry lookup.
+      const proto = Object.getPrototypeOf(client) as Record<
+        string,
+        (...args: unknown[]) => unknown
+      >;
+      const original = proto.loginWithUserId;
+      proto.loginWithUserId = vi
+        .fn()
+        .mockRejectedValue(new PortalNotFoundError("simulated downstream 404"));
+
+      try {
+        await expect(client.login()).rejects.toBeInstanceOf(
+          PortalNotFoundError,
+        );
+        expect(signer.getBLSPoP).not.toHaveBeenCalled();
+      } finally {
+        proto.loginWithUserId = original;
+      }
+    });
+
+    it("populates result.address from the wallet on auto-resolved path", async () => {
+      const signer = createMockSigner();
+      const client = makeClient({ signer });
+      const result = await client.login();
+      expect(result.address).toBe(MOCK_TAPROOT_ADDRESS);
+    });
+
+    it("populates result.address from explicit options.address", async () => {
+      const client = makeClient();
+      const result = await client.login({ address: "tb1explicit" });
+      expect(result.address).toBe("tb1explicit");
+    });
+
+    describe("registration errors (auto-register path)", () => {
+      function makeAutoRegisterFetch(
+        registerOverride: () => Response | Promise<Response>,
+      ): ReturnType<typeof createMockFetch> {
+        return createMockFetch({
+          registryEntry: () => textResponse("Not Found", 404),
+          register: registerOverride,
+        });
+      }
+
+      it("throws on 500 with portal unreachable message", async () => {
+        mockFetch = makeAutoRegisterFetch(() =>
+          textResponse("Internal Server Error", 500),
+        );
+        vi.stubGlobal("fetch", mockFetch);
+        const client = makeClient();
+        await expect(client.login()).rejects.toThrow(
+          "Portal server is unreachable",
+        );
+      });
+
+      it("throws structured error from server", async () => {
+        mockFetch = makeAutoRegisterFetch(() =>
+          jsonResponse(
+            { error: { code: "DUP", message: "Already registered" } },
+            409,
+          ),
+        );
+        vi.stubGlobal("fetch", mockFetch);
+        const client = makeClient();
+        await expect(client.login()).rejects.toThrow("Already registered");
+      });
+
+      it("throws on string error body", async () => {
+        mockFetch = makeAutoRegisterFetch(() =>
+          jsonResponse({ error: "Bad key format" }, 400),
+        );
+        vi.stubGlobal("fetch", mockFetch);
+        const client = makeClient();
+        await expect(client.login()).rejects.toThrow("Bad key format");
+      });
+
+      it("throws on invalid response shape", async () => {
+        mockFetch = makeAutoRegisterFetch(() =>
+          jsonResponse({ user_id: "u1" }),
+        );
+        vi.stubGlobal("fetch", mockFetch);
+        const client = makeClient();
+        await expect(client.login()).rejects.toThrow(
+          "missing required fields",
+        );
+      });
+    });
+
+    describe("login errors (already-registered path)", () => {
+      it("throws on invalid challenge response", async () => {
+        mockFetch = createMockFetch({
+          loginChallenge: () => jsonResponse({}),
+        });
+        vi.stubGlobal("fetch", mockFetch);
+        const client = makeClient();
+        await expect(client.login()).rejects.toThrow(
+          "Invalid challenge response",
+        );
+      });
+
+      it("throws on login failure with structured error", async () => {
+        mockFetch = createMockFetch({
+          loginPost: () =>
+            jsonResponse(
+              { error: { message: "Invalid signature" } },
+              401,
+            ),
+        });
+        vi.stubGlobal("fetch", mockFetch);
+        const client = makeClient();
+        await expect(client.login()).rejects.toThrow("Invalid signature");
+      });
+
+      it("throws on missing token in response", async () => {
+        mockFetch = createMockFetch({
+          loginPost: () => jsonResponse({ user_id: "u1" }),
+        });
+        vi.stubGlobal("fetch", mockFetch);
+        const client = makeClient();
+        await expect(client.login()).rejects.toThrow("missing token");
+      });
+
+      it("extracts role and expiresIn from JWT payload", async () => {
+        const exp = Math.floor(Date.now() / 1000) + 7200;
+        mockFetch = createMockFetch({
+          loginPost: () =>
+            jsonResponse({
+              token: makeJwt({ exp, role: "admin" }),
+              user_id: "user-1",
+            }),
+        });
+        vi.stubGlobal("fetch", mockFetch);
+        const client = makeClient();
+        const result = await client.login();
+        expect(result.role).toBe("admin");
+        expect(result.expiresIn).toBeGreaterThan(7000);
+      });
+    });
+  });
+
+  describe("detectWalletNetwork", () => {
+    it("returns matches=true when networks align", async () => {
+      const signer = createMockSigner({ network: "signet" });
+      const client = makeClient({ signer });
+      const result = await client.detectWalletNetwork();
+      expect(result).toEqual({
+        walletNetwork: "signet",
+        clientNetwork: "signet",
+        matches: true,
+      });
+    });
+
+    it("returns matches=false when wallet network differs", async () => {
+      const signer = createMockSigner({ network: "mainnet" });
+      const client = makeClient({ signer });
+      const result = await client.detectWalletNetwork();
+      expect(result).toEqual({
+        walletNetwork: "mainnet",
+        clientNetwork: "signet",
+        matches: false,
+      });
+    });
+
+    it("respects explicit walletNetwork override (testnet4)", async () => {
+      const signer = createMockSigner({ network: "testnet4" });
+      const client = makeClient({ signer, walletNetwork: "testnet4" });
+      const result = await client.detectWalletNetwork();
+      expect(result.matches).toBe(true);
+      expect(result.clientNetwork).toBe("testnet4");
+    });
+
+    it("derives clientNetwork=mainnet when network=networks.bitcoin", async () => {
+      const signer = createMockSigner({ network: "mainnet" });
+      const client = makeClient({ signer, network: networks.bitcoin });
+      const result = await client.detectWalletNetwork();
+      expect(result.clientNetwork).toBe("mainnet");
+      expect(result.matches).toBe(true);
     });
   });
 
@@ -312,6 +529,32 @@ describe("KontorPortalClient", () => {
       const info = await client.getSignerInfo("ab".repeat(32));
       expect(info.signerId).toBe(42);
       expect(info.nextNonce).toBe(5);
+    });
+
+    it("exposes userId when present in registry response", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () =>
+          jsonResponse({
+            signer_id: 42,
+            next_nonce: 5,
+            user_id: "user-42",
+          }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      const info = await client.getSignerInfo("ab".repeat(32));
+      expect(info.userId).toBe("user-42");
+    });
+
+    it("leaves userId undefined when absent from response", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () =>
+          jsonResponse({ signer_id: 1, next_nonce: 0 }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      const info = await client.getSignerInfo("pub");
+      expect(info.userId).toBeUndefined();
     });
 
     it("accepts a numeric signer_id", async () => {
