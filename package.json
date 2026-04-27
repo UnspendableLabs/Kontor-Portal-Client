@@ -25,6 +25,10 @@
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
+    },
+    "./bls": {
+      "types": "./dist/bls-primitives.d.ts",
+      "import": "./dist/bls-primitives.js"
     }
   },
   "files": [
@@ -43,12 +47,20 @@
   "peerDependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",
     "@kontor/kontor-crypto": "^0.2.0",
+    "@noble/curves": "^2.0.0",
+    "@noble/hashes": "^2.0.0",
     "bip32": "^5.0.0-rc.0",
     "bitcoinjs-lib": "^7.0.0-rc.0",
     "react": ">=18"
   },
   "peerDependenciesMeta": {
     "@kontor/kontor-crypto": {
+      "optional": true
+    },
+    "@noble/curves": {
+      "optional": true
+    },
+    "@noble/hashes": {
       "optional": true
     },
     "react": {
@@ -58,6 +70,8 @@
   "devDependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",
     "@eslint/js": "^10.0.1",
+    "@noble/curves": "^2.0.0",
+    "@noble/hashes": "^2.0.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19",

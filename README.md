@@ -28,6 +28,12 @@ For React bindings, also install React 18+.
 
 `@kontor/kontor-crypto` is optional — you can skip it if you provide your own `KontorCryptoProvider` (see [Custom adapters](#kontorcryptoprovider)).
 
+`@noble/curves` and `@noble/hashes` are optional peer dependencies, only required when using `InBrowserCustomSigner` or the `/bls` subpath export:
+
+```bash
+npm install @noble/curves @noble/hashes
+```
+
 ## Setup
 
 ```typescript
@@ -278,6 +284,59 @@ class MyCustomSigner implements BLSSigner {
 `BLSSignParams`: supply either `message` (UTF-8) or `messageHex`, not both, plus `dst` (domain separation tag). `address` (optional) identifies the account whose BLS key should sign.
 
 > **Breaking change in v0.2.0:** `BLSSigner` now requires a `getAddress()` method. The unified `login()` calls it to obtain the active Taproot address and to validate the wallet's network against the client's configured `walletNetwork`.
+
+### `InBrowserCustomSigner`
+
+A reference, no-extension `BLSSigner` that derives a Taproot key + a BLS12-381 G1 (min-sig) key entirely in the browser. It supports two real-world key sources via a discriminated-union config:
+
+1. **BIP-39 seed** — Horizon-Wallet parity. Uses the same EIP-2333 derivation path (`m/12381/{coinType}/{accountIndex}/0`) and Taproot path (default `m/86'/{coinType}'/{accountIndex}'/0/0`) as the Horizon Wallet extension.
+2. **Single 32-byte secp256k1 private key** — for Web3Auth and other social wallets that hand back a raw key (e.g. `provider.request({ method: "private_key" })`). The BIP-32 chain code is synthesized deterministically from the private key (`HMAC-SHA512("KONTOR-WEB3AUTH-CHAINCODE-V1", privateKey).slice(32)`) so we still produce a valid `xpub` that Portal already understands.
+
+```typescript
+import { InBrowserCustomSigner, KontorPortalClient } from "@unspendablelabs/kontor-portal-client";
+import { mnemonicToSeedSync } from "bip39";
+import { networks } from "bitcoinjs-lib";
+
+// 1. From a BIP-39 seed (Horizon-Wallet parity)
+const seedSigner = new InBrowserCustomSigner({
+  seed: mnemonicToSeedSync("..."),
+  network: networks.bitcoin,
+  // accountIndex: 0,                                    // optional, default 0
+  // taprootDerivationPath: "m/86'/0'/0'/0/0",           // optional, derived from network coinType + accountIndex
+  // walletNetwork: "mainnet",                           // optional, derived from network
+});
+
+// 2. From a single secp256k1 private key (Web3Auth, social wallets)
+const pkSigner = new InBrowserCustomSigner({
+  privateKey: web3authPrivateKey, // 32 bytes
+  network: networks.bitcoin,
+});
+
+const client = new KontorPortalClient({
+  portalHost: "https://portal.example.com",
+  signer: seedSigner, // or pkSigner
+});
+```
+
+`InBrowserCustomSigner` is a single-account signer: `getBLSPoP(address)` and `signBLS({ address })` validate the supplied address against the cached Taproot address and throw on mismatch.
+
+### `/bls` subpath (raw BLS primitives)
+
+For downstream wallets that want the underlying BLS12-381 helpers without the rest of the client (e.g. Horizon-Wallet bundling them directly into the extension), this package re-exports them under a stable `/bls` subpath whose API matches Horizon-Wallet's `tool/bls-entry.js` byte-for-byte:
+
+```typescript
+import {
+  KONTOR_BLS_DST,
+  sign,
+  getPublicKey,
+  deriveMasterSK,
+  deriveBlsKey,
+  signBlsBinding,
+  schnorrBindingHash,
+} from "@unspendablelabs/kontor-portal-client/bls";
+```
+
+All functions are pure (no `window` access, no async) and faithful TypeScript ports of the JS reference: same EIP-2333 key derivation, same `KONTOR_BLS_DST`, same Schnorr/BLS binding prefixes, same BLS12-381 G1 min-sig signatures.
 
 ### `KontorCryptoProvider`
 
