@@ -18,7 +18,7 @@ import {
   DOWNLOAD_URL,
   DOWNLOAD_FILE_CONTENT,
 } from "./helpers/fixtures";
-import type { KontorPortalClientConfig } from "../types";
+import type { KontorPortalClientConfig, NonceProvider } from "../types";
 
 function makeClient(overrides?: Partial<KontorPortalClientConfig>) {
   return new KontorPortalClient({
@@ -62,6 +62,46 @@ describe("InMemoryNonceProvider", () => {
     await np.reportNonceUsed(1, 10);
     await np.reportNonceUsed(1, 5);
     expect(await np.getNextNonce(1, 0)).toBe(11);
+  });
+
+  describe("setNonce", () => {
+    it("stores nonce - 1 so the next getNextNonce returns nonce", async () => {
+      const np = new InMemoryNonceProvider();
+      await np.setNonce(1, 7);
+      expect(await np.getNextNonce(1, 0)).toBe(7);
+    });
+
+    it("overwrites a higher local state with a lower Portal value", async () => {
+      const np = new InMemoryNonceProvider();
+      await np.reportNonceUsed(1, 50);
+      await np.setNonce(1, 10);
+      expect(await np.getNextNonce(1, 10)).toBe(10);
+    });
+
+    it("does not affect other signers", async () => {
+      const np = new InMemoryNonceProvider();
+      await np.reportNonceUsed(1, 50);
+      await np.reportNonceUsed(2, 30);
+      await np.setNonce(1, 5);
+      expect(await np.getNextNonce(1, 0)).toBe(5);
+      expect(await np.getNextNonce(2, 0)).toBe(31);
+    });
+
+    it("yields chainNonce when chain advanced past the set nonce", async () => {
+      const np = new InMemoryNonceProvider();
+      await np.setNonce(1, 5);
+      expect(await np.getNextNonce(1, 12)).toBe(12);
+    });
+
+    it("handles nonce=0 safely (lastUsed=-1, next nonce=0)", async () => {
+      // Register branch: a freshly-registered user has next_nonce=0.
+      // setNonce(_, 0) must store -1 without breaking the following calls,
+      // and the next getNextNonce(_, 0) must return 0 (not -1, not NaN).
+      const np = new InMemoryNonceProvider();
+      await np.setNonce(1, 0);
+      expect(await np.getNextNonce(1, 0)).toBe(0);
+      expect(await np.getNextNonce(1, 3)).toBe(3);
+    });
   });
 });
 
@@ -180,7 +220,9 @@ describe("KontorPortalClient", () => {
       const client = makeClient({ signer });
       const result = await client.login();
 
-      expect(registryCalls).toBe(1);
+      // 2 registry hits: pre-register check (404) + post-register nonce
+      // resync (also 404 here in the mock; the resync swallows the error).
+      expect(registryCalls).toBe(2);
       expect(result.registration).not.toBeNull();
       expect(result.registration?.userId).toBe("user-1");
       expect(result.registration?.xpubkey).toBe(POP.xpubkey);
@@ -375,6 +417,93 @@ describe("KontorPortalClient", () => {
       const client = makeClient();
       const result = await client.login({ address: "tb1explicit" });
       expect(result.address).toBe("tb1explicit");
+    });
+
+    describe("nonce reset on login", () => {
+      it("force-overwrites a stale local nonce ahead of the Portal", async () => {
+        const np = new InMemoryNonceProvider();
+        // Local tracker is far ahead (e.g. another tab or stale session).
+        await np.reportNonceUsed(42, 100);
+
+        const client = makeClient({ nonceProvider: np });
+        client.setJwt(makeJwt());
+        await client.login();
+
+        // After login, an upload must use the Portal's authoritative nonce
+        // (5, from the default registryEntry fixture), not local + 1 = 101.
+        const file = new File(["hi"], "a.txt", { type: "text/plain" });
+        await client.uploadFile(file, { xOnlyPubkey: "ab".repeat(32) });
+
+        const filesCall = mockFetch.mock.calls.find(
+          (c) =>
+            String(c[0]).includes("/api/files") &&
+            (c[1]?.method ?? "").toUpperCase() === "POST",
+        );
+        const body = JSON.parse(filesCall?.[1]?.body as string);
+        expect(body.files[0].nonce).toBe(5);
+      });
+
+      it("calls setNonce with the raw chainNonce on the already-registered path", async () => {
+        const np = new InMemoryNonceProvider();
+        const setNonceSpy = vi.spyOn(np, "setNonce");
+        const client = makeClient({ nonceProvider: np });
+        await client.login();
+        expect(setNonceSpy).toHaveBeenCalledWith(42, 5);
+      });
+
+      it("calls setNonce with the freshly-fetched chainNonce on the auto-register path", async () => {
+        // First registry call (pre-register check) → 404, second call
+        // (post-register resync) → registry entry with chainNonce=0.
+        let registryCalls = 0;
+        mockFetch = createMockFetch({
+          registryEntry: () => {
+            registryCalls++;
+            if (registryCalls === 1) return textResponse("Not Found", 404);
+            return jsonResponse({
+              signer_id: 7,
+              next_nonce: 0,
+              user_id: "user-1",
+            });
+          },
+        });
+        vi.stubGlobal("fetch", mockFetch);
+
+        const np = new InMemoryNonceProvider();
+        const setNonceSpy = vi.spyOn(np, "setNonce");
+        const client = makeClient({ nonceProvider: np });
+        await client.login();
+
+        expect(registryCalls).toBe(2);
+        expect(setNonceSpy).toHaveBeenCalledWith(7, 0);
+      });
+
+      it("calls setNonce unconditionally even when local is behind the Portal", async () => {
+        // The semantics of the reset are "overwrite, no comparison". Even when
+        // the local tracker has nothing (or is below the Portal), setNonce must
+        // still be invoked so any future custom provider tracking divergence
+        // sees the resync event.
+        const np = new InMemoryNonceProvider();
+        const setNonceSpy = vi.spyOn(np, "setNonce");
+        const client = makeClient({ nonceProvider: np });
+        await client.login();
+        expect(setNonceSpy).toHaveBeenCalledTimes(1);
+        expect(setNonceSpy).toHaveBeenCalledWith(42, 5);
+      });
+
+      it("works with a custom NonceProvider that omits setNonce (back-compat)", async () => {
+        // setNonce is optional on the interface. A pre-existing custom provider
+        // that doesn't implement it must keep working — the optional-chaining
+        // call site (`setNonce?.()`) must not crash, and login() must succeed.
+        const customProvider: NonceProvider = {
+          async getNextNonce(_signerId, chainNonce) {
+            return chainNonce;
+          },
+        };
+        const client = makeClient({ nonceProvider: customProvider });
+        const result = await client.login();
+        expect(result.jwt).toBeTruthy();
+        expect(result.userId).toBe("user-1");
+      });
     });
 
     describe("registration errors (auto-register path)", () => {

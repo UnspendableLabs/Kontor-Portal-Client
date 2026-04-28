@@ -78,6 +78,10 @@ export interface KontorCryptoProvider {
 export interface NonceProvider {
   getNextNonce(signerId: number, chainNonce: number): Promise<number>;
   reportNonceUsed?(signerId: number, nonceUsed: number): Promise<void>;
+  /** Force the local "last used" tracker to `nonce - 1` so the next
+   *  getNextNonce returns at least `nonce`. Called on login to resync
+   *  with the Portal's authoritative `next_nonce`. */
+  setNonce?(signerId: number, nonce: number): Promise<void>;
 }
 
 export interface KontorPortalClientConfig {
@@ -151,7 +155,10 @@ export interface LoginResult {
 
 export interface SignerInfo {
   signerId: number;
+  /** Effective next nonce after `NonceProvider.getNextNonce` arbitration. */
   nextNonce: number;
+  /** Raw `next_nonce` value returned by `/api/registry/entry` (Portal-authoritative). */
+  chainNonce: number;
   /**
    * Present when the registry entry resolves to a `users` row (lookup by
    * Bitcoin address or x-only pubkey of a registered user). Absent when the

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- **`NonceProvider.setNonce(signerId, nonce)`** — new optional method on the `NonceProvider` interface. `login()` calls it after the registry lookup to force-overwrite the local "last used" tracker with the Portal's authoritative `next_nonce`. Resyncs across tabs/sessions where the local state may be stale (e.g. another tab advanced the nonce, or a persistent provider holds a value ahead of the chain). `InMemoryNonceProvider` implements it. Existing custom providers without `setNonce` keep working unchanged (the call site uses optional chaining).
+- **`SignerInfo.chainNonce`** — new field exposing the raw `next_nonce` value returned by `/api/registry/entry`, alongside the existing `nextNonce` (which remains the post-`NonceProvider` effective value).
+
 ## 0.2.0 (2026-04-27)
 
 ### Breaking changes

@@ -162,7 +162,7 @@ await client.login({ address: "bc1p..." });
     - a numeric Kontor `signer_id` (e.g. `"0"`),
     - an x-only public key in hex (64 hex chars), or
     - a Bitcoin address registered with the Portal (via `login()` or node registration).
-- **Returns:** `SignerInfo` — `{ signerId: number; nextNonce: number; userId?: string }`. `userId` is present when the registry entry resolves to a `users` row (lookup by Bitcoin address or x-only pubkey of a registered user). Sends `Authorization` when a JWT is present. Throws `PortalNotFoundError` on 404 (e.g. address not registered).
+- **Returns:** `SignerInfo` — `{ signerId: number; nextNonce: number; chainNonce: number; userId?: string }`. `nextNonce` is the effective nonce after `NonceProvider.getNextNonce` arbitration; `chainNonce` is the raw value returned by the Portal registry (Portal-authoritative, used by `login()` to resync the local nonce tracker). `userId` is present when the registry entry resolves to a `users` row (lookup by Bitcoin address or x-only pubkey of a registered user). Sends `Authorization` when a JWT is present. Throws `PortalNotFoundError` on 404 (e.g. address not registered).
 
 ### `uploadFile(file, options)`
 
@@ -361,6 +361,10 @@ const nonceProvider: NonceProvider = {
   },
   async reportNonceUsed(signerId, nonceUsed) {
     /* optional — called after a successful upload using that nonce */
+  },
+  async setNonce(signerId, nonce) {
+    /* optional — called by login() to force-overwrite the local tracker
+       with the Portal's authoritative next_nonce (resync across tabs/sessions) */
   },
 };
 ```

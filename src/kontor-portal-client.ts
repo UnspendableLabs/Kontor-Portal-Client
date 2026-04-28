@@ -55,6 +55,10 @@ export class InMemoryNonceProvider implements NonceProvider {
     const current = this.lastUsed.get(signerId) ?? -1;
     this.lastUsed.set(signerId, Math.max(current, nonceUsed));
   }
+
+  async setNonce(signerId: number, nonce: number): Promise<void> {
+    this.lastUsed.set(signerId, nonce - 1);
+  }
 }
 
 export class KontorPortalClient {
@@ -291,6 +295,9 @@ export class KontorPortalClient {
       if (info.userId) {
         existingUserId = info.userId;
       }
+      // Force-overwrite local nonce state with Portal's authoritative value.
+      // Resyncs across tabs/sessions where the local tracker may be stale.
+      await this.nonceProvider.setNonce?.(info.signerId, info.chainNonce);
     } catch (err) {
       if (!(err instanceof PortalNotFoundError)) throw err;
     }
@@ -310,6 +317,17 @@ export class KontorPortalClient {
       address,
       options,
     );
+
+    // After registration, re-fetch signer info to align the local nonce
+    // tracker with the freshly-created Portal entry. Avoids contamination
+    // from a stale local state for the new user's first upload.
+    try {
+      const info = await this.getSignerInfo(address);
+      await this.nonceProvider.setNonce?.(info.signerId, info.chainNonce);
+    } catch {
+      // Non-critical: upload path will resync on next getSignerInfo.
+    }
+
     return { ...loginResult, address, registration };
   }
 
@@ -429,6 +447,7 @@ export class KontorPortalClient {
     return {
       signerId: data.signer_id,
       nextNonce: effectiveNonce,
+      chainNonce: data.next_nonce,
       userId: data.user_id,
     };
   }
