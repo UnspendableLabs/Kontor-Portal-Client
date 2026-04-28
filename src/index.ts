@@ -3,6 +3,8 @@ export {
   InMemoryNonceProvider,
 } from "./kontor-portal-client";
 export { HorizonWalletSigner } from "./horizon-wallet-signer";
+export { InBrowserCustomSigner } from "./in-browser-custom-signer";
+export type { InBrowserCustomSignerConfig } from "./in-browser-custom-signer";
 export { NetworkMismatchError, PortalNotFoundError } from "./types";
 
 export type {
