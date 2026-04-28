@@ -1,11 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 (2026-04-28)
 
 ### Features
 
+- **`InBrowserCustomSigner`** — new browser-friendly `BLSSigner` implementation that derives a Taproot key + a BLS12-381 G1 (min-sig) key entirely in-process from either a BIP-39 seed (Horizon-Wallet parity, same EIP-2333 derivation) or a single 32-byte secp256k1 private key (Web3Auth / social wallets). In the private-key branch the BIP-32 chain code is synthesized deterministically (`HMAC-SHA512("KONTOR-WEB3AUTH-CHAINCODE-V1", privateKey)`) so the resulting `xpub` stays compatible with Portal. All keys are pre-derived in the constructor; `getAddress`, `getBLSPoP`, and `signBLS` only return cached values plus a fresh BLS signature when needed.
+- **`/bls` subpath export** — new `@unspendablelabs/kontor-portal-client/bls` entry point exposing portable BLS primitives (`KONTOR_BLS_DST`, `deriveMasterSK`, `deriveBlsKey`, `sign`, `getPublicKey`, `signBlsBinding`, `schnorrBindingHash`). Direct port of `Horizon-Wallet/tool/bls-entry.js`, names matching byte-for-byte.
 - **`NonceProvider.setNonce(signerId, nonce)`** — new optional method on the `NonceProvider` interface. `login()` calls it after the registry lookup to force-overwrite the local "last used" tracker with the Portal's authoritative `next_nonce`. Resyncs across tabs/sessions where the local state may be stale (e.g. another tab advanced the nonce, or a persistent provider holds a value ahead of the chain). `InMemoryNonceProvider` implements it. Existing custom providers without `setNonce` keep working unchanged (the call site uses optional chaining).
 - **`SignerInfo.chainNonce`** — new field exposing the raw `next_nonce` value returned by `/api/registry/entry`, alongside the existing `nextNonce` (which remains the post-`NonceProvider` effective value).
+- **New exported types** — `InBrowserCustomSignerConfig`.
+
+### Dependencies
+
+- **New optional peer dependencies** — `@noble/curves@^2.0.0` and `@noble/hashes@^2.0.0`. Only required when using `InBrowserCustomSigner` or the `/bls` subpath export; existing consumers using only `HorizonWalletSigner` are unaffected.
 
 ## 0.2.0 (2026-04-27)
 
