@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3 (2026-04-29)
+
+### Fixes
+
+- **`HorizonWalletSigner.getAddress()` falls back to inferring the network from the Taproot address prefix** — older Horizon Wallet builds (and any custom wallet implementation) whose `getAddresses` RPC response omits or returns an unrecognized `network` field no longer break `client.login()`. When the wallet-supplied `network` is missing or not in `["mainnet", "testnet4", "signet"]`, the signer infers it from the bech32m HRP on the returned p2tr address (`bc1p…` → `"mainnet"`, `tb1p…` → `"signet"`, mirroring `KontorPortalClient.toWalletNetwork`'s testnet→signet default). The wallet-supplied `network` is still preferred when it is one of the known values, and the subsequent `walletNetwork` mismatch check in `login()` still protects against accidentally talking to the wrong network. The signer still throws `"Wallet did not return a valid network"` when both the supplied `network` and the address prefix are unrecognized (e.g. `bcrt1p…` regtest).
+- **React hook `login()` re-throws on failure** — the `login` callback returned by `usePortalClient()` now re-throws the underlying error after setting `status: "error"` / `error: <message>`, instead of resolving silently. Consumers awaiting `login()` can now `try/catch` the failure directly without also subscribing to `status`/`error`. Reactive consumers reading `status`/`error` keep working unchanged.
+
 ## 0.2.2 (2026-04-29)
 
 ### Fixes

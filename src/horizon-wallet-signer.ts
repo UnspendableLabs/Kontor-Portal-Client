@@ -77,19 +77,32 @@ export class HorizonWalletSigner implements BLSSigner {
       throw new Error("Wallet did not return address data");
     }
 
-    const network = result.network;
-    if (!isWalletNetwork(network)) {
-      throw new Error("Wallet did not return a valid network");
-    }
-
     const taproot = (result.addresses ?? []).find(
       (a) => a?.type === "p2tr" && typeof a?.address === "string" && a.address,
     );
     if (!taproot || typeof taproot.address !== "string" || !taproot.address) {
       throw new Error("Wallet did not return a Taproot (p2tr) address");
     }
+    const taprootAddress = taproot.address;
 
-    return { address: taproot.address, network };
+    // Older Horizon Wallet builds (and any custom wallet that hasn't
+    // implemented the `network` field yet) return only `{ addresses }`. The
+    // bech32m HRP on the Taproot address itself unambiguously identifies
+    // mainnet vs testnet/signet, so we can infer the wallet network from
+    // the address prefix when the wallet didn't supply one. Mirrors
+    // `KontorPortalClient.toWalletNetwork`'s testnet→signet default.
+    let network: WalletNetwork;
+    if (isWalletNetwork(result.network)) {
+      network = result.network;
+    } else if (taprootAddress.startsWith("bc1p")) {
+      network = "mainnet";
+    } else if (taprootAddress.startsWith("tb1p")) {
+      network = "signet";
+    } else {
+      throw new Error("Wallet did not return a valid network");
+    }
+
+    return { address: taprootAddress, network };
   }
 
   async getBLSPoP(address: string): Promise<BLSPoP> {

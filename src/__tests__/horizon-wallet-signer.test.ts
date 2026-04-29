@@ -77,11 +77,60 @@ describe("HorizonWalletSigner", () => {
       await expect(signer.getAddress()).rejects.toThrow("Taproot");
     });
 
-    it("throws when network is missing", async () => {
+    it("infers mainnet from a bc1p Taproot address when network is missing", async () => {
       installProvider({
         request: vi.fn().mockResolvedValue({
           result: {
-            addresses: [{ address: "bc1p...", type: "p2tr" }],
+            addresses: [{ address: "bc1pmainnetaddr", type: "p2tr" }],
+          },
+        }),
+      });
+      const signer = new HorizonWalletSigner();
+      const result = await signer.getAddress();
+      expect(result).toEqual({
+        address: "bc1pmainnetaddr",
+        network: "mainnet",
+      });
+    });
+
+    it("infers signet from a tb1p Taproot address when network is missing", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({
+          result: {
+            addresses: [{ address: "tb1psignetaddr", type: "p2tr" }],
+          },
+        }),
+      });
+      const signer = new HorizonWalletSigner();
+      const result = await signer.getAddress();
+      expect(result).toEqual({
+        address: "tb1psignetaddr",
+        network: "signet",
+      });
+    });
+
+    it("infers network from address prefix when network value is unrecognized", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({
+          result: {
+            network: "regtest",
+            addresses: [{ address: "bc1pmainnetaddr", type: "p2tr" }],
+          },
+        }),
+      });
+      const signer = new HorizonWalletSigner();
+      const result = await signer.getAddress();
+      expect(result).toEqual({
+        address: "bc1pmainnetaddr",
+        network: "mainnet",
+      });
+    });
+
+    it("throws when network is missing and Taproot prefix is unrecognized", async () => {
+      installProvider({
+        request: vi.fn().mockResolvedValue({
+          result: {
+            addresses: [{ address: "bcrt1pregtestaddr", type: "p2tr" }],
           },
         }),
       });
@@ -89,17 +138,21 @@ describe("HorizonWalletSigner", () => {
       await expect(signer.getAddress()).rejects.toThrow("valid network");
     });
 
-    it("throws when network value is not one of the known strings", async () => {
+    it("prefers the wallet-supplied network when it is valid", async () => {
       installProvider({
         request: vi.fn().mockResolvedValue({
           result: {
-            network: "regtest",
-            addresses: [{ address: "bc1p...", type: "p2tr" }],
+            network: "testnet4",
+            addresses: [{ address: "tb1ptestnet4addr", type: "p2tr" }],
           },
         }),
       });
       const signer = new HorizonWalletSigner();
-      await expect(signer.getAddress()).rejects.toThrow("valid network");
+      const result = await signer.getAddress();
+      expect(result).toEqual({
+        address: "tb1ptestnet4addr",
+        network: "testnet4",
+      });
     });
 
     it("throws when addresses array is empty", async () => {

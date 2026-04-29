@@ -430,6 +430,17 @@ function MyComponent() {
 
 `PortalAuthStatus` is one of `"loading"` | `"authenticated"` | `"needs_login"` | `"logging_in"` | `"error"`. `login()` handles registration on demand, so there is no separate `"needs_registration"` state.
 
+On failure, `login()` updates `status` to `"error"` (with `error` set to the message) **and** re-throws the underlying error, so callers awaiting the call can `try/catch` it directly without also subscribing to `status` / `error`:
+
+```tsx
+try {
+  await login();
+} catch (err) {
+  // handle the failure (e.g. toast, retry button, …)
+  // `status` is already `"error"` and `error` already holds `err.message`
+}
+```
+
 ## WASM crypto setup
 
 `@kontor/kontor-crypto` is a WASM module that handles Reed–Solomon encoding, Merkle tree computation, and file preparation. Because WASM cannot be bundled like regular JavaScript, the module must be **served as a static asset** by your application.

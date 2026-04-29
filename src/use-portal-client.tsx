@@ -40,6 +40,16 @@ interface PortalClientContextValue {
   xOnlyPubkey: string | null;
   blsPubkey: string | null;
   isLoading: boolean;
+  /**
+   * Triggers `client.login()`. Sets `status` to `"logging_in"` while in
+   * flight, then `"authenticated"` on success or `"error"` on failure
+   * (with the message exposed via `error`).
+   *
+   * On failure the underlying error is **re-thrown** so callers awaiting
+   * `login()` can `try/catch` it directly without also having to subscribe
+   * to `status` / `error`. The hook still updates state for consumers that
+   * prefer the reactive contract.
+   */
   login: () => Promise<void>;
   logout: () => void;
   reset: () => void;
@@ -155,6 +165,9 @@ export function PortalClientProvider({
       const message = err instanceof Error ? err.message : "Login failed";
       setError(message);
       setStatus("error");
+      // Re-throw so callers awaiting `login()` see the failure directly;
+      // state is still updated for consumers reading `status` / `error`.
+      throw err;
     }
   }, [client, taprootAddress, portalUserId]);
 
