@@ -355,10 +355,17 @@ describe("usePortalClient", () => {
         expect(result.current.status).toBe("needs_login");
       });
 
+      let caught: unknown;
       await act(async () => {
-        await result.current.login();
+        try {
+          await result.current.login();
+        } catch (err) {
+          caught = err;
+        }
       });
 
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toMatch(/challenge|fail|500/i);
       expect(result.current.status).toBe("error");
       expect(result.current.error).toBeTruthy();
     });
