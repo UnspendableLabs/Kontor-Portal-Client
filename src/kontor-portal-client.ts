@@ -289,11 +289,19 @@ export class KontorPortalClient {
     // branch. Errors from the subsequent loginWithUserId/registerInternal
     // calls must propagate as-is — never silently fall through to register.
     options?.onStep?.("checking_registration");
-    let existingUserId: string | null = null;
+    let existing: {
+      userId: string;
+      xOnlyPubkey: string;
+      blsPubkey: string | null;
+    } | null = null;
     try {
       const info = await this.getSignerInfo(address);
       if (info.userId) {
-        existingUserId = info.userId;
+        existing = {
+          userId: info.userId,
+          xOnlyPubkey: info.xOnlyPubkey,
+          blsPubkey: info.blsPubkey,
+        };
       }
       // Force-overwrite local nonce state with Portal's authoritative value.
       // Resyncs across tabs/sessions where the local tracker may be stale.
@@ -302,13 +310,19 @@ export class KontorPortalClient {
       if (!(err instanceof PortalNotFoundError)) throw err;
     }
 
-    if (existingUserId !== null) {
+    if (existing !== null) {
       const loginResult = await this.loginWithUserId(
-        existingUserId,
+        existing.userId,
         address,
         options,
       );
-      return { ...loginResult, address, registration: null };
+      return {
+        ...loginResult,
+        address,
+        xOnlyPubkey: existing.xOnlyPubkey,
+        blsPubkey: existing.blsPubkey,
+        registration: null,
+      };
     }
 
     const registration = await this.registerInternal(address, options);
@@ -328,7 +342,13 @@ export class KontorPortalClient {
       // Non-critical: upload path will resync on next getSignerInfo.
     }
 
-    return { ...loginResult, address, registration };
+    return {
+      ...loginResult,
+      address,
+      xOnlyPubkey: registration.xOnlyPubkey,
+      blsPubkey: registration.blsPubkey,
+      registration,
+    };
   }
 
   private async loginWithUserId(
@@ -437,7 +457,15 @@ export class KontorPortalClient {
       signer_id: number;
       next_nonce: number;
       user_id?: string;
+      x_only_pubkey?: string;
+      bls_pubkey?: string | null;
     };
+
+    if (typeof data.x_only_pubkey !== "string") {
+      throw new Error(
+        "Invalid registry response: missing x_only_pubkey",
+      );
+    }
 
     const effectiveNonce = await this.nonceProvider.getNextNonce(
       data.signer_id,
@@ -449,6 +477,9 @@ export class KontorPortalClient {
       nextNonce: effectiveNonce,
       chainNonce: data.next_nonce,
       userId: data.user_id,
+      xOnlyPubkey: data.x_only_pubkey,
+      blsPubkey:
+        typeof data.bls_pubkey === "string" ? data.bls_pubkey : null,
     };
   }
 

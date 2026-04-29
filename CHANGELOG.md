@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 (2026-04-29)
+
+### Fixes
+
+- **`getSignerInfo()` now exposes `xOnlyPubkey` and `blsPubkey`** — fields are read from the registry response (`x_only_pubkey`, `bls_pubkey`) and surfaced on `SignerInfo`. `blsPubkey` is `null` when the registry entry has no bound BLS key. `getSignerInfo()` now throws when `x_only_pubkey` is missing from the response (the field is always present in well-formed Portal responses).
+- **`UnifiedLoginResult` now always carries `xOnlyPubkey` and `blsPubkey`** — populated from the registration payload on the auto-register path and from the registry lookup on the already-registered path. Callers no longer need to make a follow-up `getSignerInfo()` call (or persist `xOnlyPubkey` themselves at registration time) to obtain the value required by `UploadOptions.xOnlyPubkey`.
+- **React hook persists `xOnlyPubkey` / `blsPubkey` on the already-registered path** — fixes a regression where a fresh browser session (no `localStorage`) on an already-registered wallet would leave `xOnlyPubkey` `null`, breaking the next `uploadFile()` call. The hook now writes both fields to `localStorage` after every successful `login()`, regardless of whether registration was performed.
+
 ## 0.2.1 (2026-04-28)
 
 ### Features

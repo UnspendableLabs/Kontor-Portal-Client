@@ -170,6 +170,8 @@ describe("usePortalClient", () => {
               signer_id: 42,
               next_nonce: 5,
               user_id: "user-1",
+              x_only_pubkey: "ab".repeat(32),
+              bls_pubkey: "cd".repeat(48),
             }),
             { status: 200, headers: { "Content-Type": "application/json" } },
           );
@@ -197,6 +199,41 @@ describe("usePortalClient", () => {
       expect(result.current.xpubkey).toBe(POP.xpubkey);
       expect(mockStorage.getItem("portal_user_id")).toBe("user-1");
       expect(mockStorage.getItem("portal_xpubkey")).toBe(POP.xpubkey);
+    });
+
+    it("persists xOnlyPubkey on the already-registered path (recovers from cleared localStorage)", async () => {
+      // Simulate a fresh browser session: stored taprootAddress +
+      // portal_user_id (so the user appears registered to the hook), but
+      // no xOnlyPubkey. After login, the hook MUST populate xOnlyPubkey
+      // from the registry response so the next uploadFile() call has it.
+      mockStorage.setItem("portal_user_id", "user-1");
+      mockStorage.setItem("portal_taproot_address", "tb1addr");
+
+      const config = makeConfig();
+      const { result } = renderHook(() => usePortalClient(), {
+        wrapper: wrapper(config),
+      });
+
+      await vi.waitFor(() => {
+        expect(result.current.status).toBe("needs_login");
+      });
+      expect(result.current.xOnlyPubkey).toBeNull();
+      expect(result.current.blsPubkey).toBeNull();
+
+      await act(async () => {
+        await result.current.login();
+      });
+
+      expect(result.current.status).toBe("authenticated");
+      expect(result.current.xOnlyPubkey).toBe("ab".repeat(32));
+      expect(result.current.blsPubkey).toBe("cd".repeat(48));
+      expect(mockStorage.getItem("portal_x_only_pubkey")).toBe(
+        "ab".repeat(32),
+      );
+      expect(mockStorage.getItem("portal_bls_pubkey")).toBe("cd".repeat(48));
+      // xpubkey is NOT recoverable from the registry, so it stays null
+      // unless the user re-registers.
+      expect(result.current.xpubkey).toBeNull();
     });
 
     it("persists userId from login result when not previously stored", async () => {
@@ -273,6 +310,8 @@ describe("usePortalClient", () => {
               signer_id: 42,
               next_nonce: 5,
               user_id: "user-1",
+              x_only_pubkey: "ab".repeat(32),
+              bls_pubkey: "cd".repeat(48),
             }),
             { status: 200, headers: { "Content-Type": "application/json" } },
           );

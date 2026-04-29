@@ -234,7 +234,12 @@ describe("KontorPortalClient", () => {
     it("not-registered (missing user_id field): auto-registers", async () => {
       mockFetch = createMockFetch({
         registryEntry: () =>
-          jsonResponse({ signer_id: 1, next_nonce: 0 }),
+          jsonResponse({
+            signer_id: 1,
+            next_nonce: 0,
+            x_only_pubkey: "ee".repeat(32),
+            bls_pubkey: null,
+          }),
       });
       vi.stubGlobal("fetch", mockFetch);
 
@@ -419,6 +424,30 @@ describe("KontorPortalClient", () => {
       expect(result.address).toBe("tb1explicit");
     });
 
+    it("populates result.xOnlyPubkey and result.blsPubkey on the already-registered path", async () => {
+      // Default mock fixture returns x_only_pubkey="ab"*32 and
+      // bls_pubkey="cd"*48 on the registry endpoint.
+      const client = makeClient();
+      const result = await client.login();
+      expect(result.registration).toBeNull();
+      expect(result.xOnlyPubkey).toBe("ab".repeat(32));
+      expect(result.blsPubkey).toBe("cd".repeat(48));
+    });
+
+    it("populates result.xOnlyPubkey and result.blsPubkey on the auto-register path from the registration payload", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () => textResponse("Not Found", 404),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const client = makeClient();
+      const result = await client.login();
+      expect(result.registration).not.toBeNull();
+      // Default register fixture: x_only_pubkey="ab"*32, bls_pubkey="cd"*48.
+      expect(result.xOnlyPubkey).toBe(result.registration?.xOnlyPubkey);
+      expect(result.blsPubkey).toBe(result.registration?.blsPubkey);
+    });
+
     describe("nonce reset on login", () => {
       it("force-overwrites a stale local nonce ahead of the Portal", async () => {
         const np = new InMemoryNonceProvider();
@@ -463,6 +492,8 @@ describe("KontorPortalClient", () => {
               signer_id: 7,
               next_nonce: 0,
               user_id: "user-1",
+              x_only_pubkey: "ab".repeat(32),
+              bls_pubkey: "cd".repeat(48),
             });
           },
         });
@@ -667,6 +698,8 @@ describe("KontorPortalClient", () => {
             signer_id: 42,
             next_nonce: 5,
             user_id: "user-42",
+            x_only_pubkey: "ab".repeat(32),
+            bls_pubkey: "cd".repeat(48),
           }),
       });
       vi.stubGlobal("fetch", mockFetch);
@@ -678,12 +711,52 @@ describe("KontorPortalClient", () => {
     it("leaves userId undefined when absent from response", async () => {
       mockFetch = createMockFetch({
         registryEntry: () =>
-          jsonResponse({ signer_id: 1, next_nonce: 0 }),
+          jsonResponse({
+            signer_id: 1,
+            next_nonce: 0,
+            x_only_pubkey: "ee".repeat(32),
+            bls_pubkey: null,
+          }),
       });
       vi.stubGlobal("fetch", mockFetch);
       const client = makeClient();
       const info = await client.getSignerInfo("pub");
       expect(info.userId).toBeUndefined();
+    });
+
+    it("exposes xOnlyPubkey and blsPubkey from the registry response", async () => {
+      const client = makeClient();
+      const info = await client.getSignerInfo("ab".repeat(32));
+      expect(info.xOnlyPubkey).toBe("ab".repeat(32));
+      expect(info.blsPubkey).toBe("cd".repeat(48));
+    });
+
+    it("returns blsPubkey=null when the registry entry has no bound BLS key", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () =>
+          jsonResponse({
+            signer_id: 1,
+            next_nonce: 0,
+            x_only_pubkey: "ee".repeat(32),
+            bls_pubkey: null,
+          }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      const info = await client.getSignerInfo("pub");
+      expect(info.blsPubkey).toBeNull();
+    });
+
+    it("throws when x_only_pubkey is missing from the registry response", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () =>
+          jsonResponse({ signer_id: 1, next_nonce: 0 }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.getSignerInfo("pub")).rejects.toThrow(
+        "missing x_only_pubkey",
+      );
     });
 
     it("accepts a numeric signer_id", async () => {

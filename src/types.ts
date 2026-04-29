@@ -165,6 +165,20 @@ export interface SignerInfo {
    * resolved identifier corresponds to a non-user signer (e.g. a node).
    */
   userId?: string;
+  /**
+   * X-only public key (32-byte hex, 64 chars) of the signer, as recorded by
+   * Kontor. Always present in the registry response. Useful as the
+   * `UploadOptions.xOnlyPubkey` value when the caller did not retain it from
+   * the original registration (e.g. fresh browser session, cleared
+   * `localStorage`).
+   */
+  xOnlyPubkey: string;
+  /**
+   * BLS12-381 G1 public key (hex). `null` when the registry entry exists
+   * but no BLS key has been bound yet (e.g. some node entries before
+   * `register_bls_key`).
+   */
+  blsPubkey: string | null;
 }
 
 export type UnifiedLoginStep =
@@ -190,6 +204,22 @@ export interface UnifiedLoginResult extends LoginResult {
    * `signer.getAddress()`. Always populated.
    */
   address: string;
+  /**
+   * X-only public key (32-byte hex) of the signer that just logged in.
+   * Always populated — sourced from `result.registration` on the
+   * auto-register path, or from the registry lookup on the
+   * already-registered path. Use this as `UploadOptions.xOnlyPubkey`
+   * without needing a separate `getSignerInfo()` round-trip.
+   */
+  xOnlyPubkey: string;
+  /**
+   * BLS public key (hex) of the signer that just logged in. Sourced from
+   * `result.registration` on the auto-register path, or from the registry
+   * lookup on the already-registered path (where it is `null` only if the
+   * registry entry has no bound BLS key — should not happen for users that
+   * completed `client.login()`).
+   */
+  blsPubkey: string | null;
   /**
    * `null` when the user was already registered. Populated with the
    * registration data when this call also performed an automatic
