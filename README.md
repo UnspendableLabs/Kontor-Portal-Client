@@ -89,9 +89,12 @@ if (result.registration) {
   console.log("Registered new user:", result.registration.userId);
 }
 
-// Upload a file
+// Upload a file. `result.xOnlyPubkey` is always populated (sourced from
+// the registration on the new-user path, or from the registry lookup on
+// the already-registered path), so you never have to call
+// getSignerInfo() yourself just to get this value.
 const uploadResult = await client.uploadFile(file, {
-  xOnlyPubkey: result.registration?.xOnlyPubkey ?? "<stored xOnlyPubkey>",
+  xOnlyPubkey: result.xOnlyPubkey,
   tags: ["document", "contract"],
   onStep: (step) => console.log("Upload step:", step),
   onPrepareProgress: (progress, phase) => {
@@ -145,7 +148,11 @@ await client.login({ address: "bc1p..." });
 - **Parameters:**
   - `options?.address` — Taproot address. When omitted, the signer's `getAddress()` is called and the returned network is validated against the client's configured `walletNetwork`.
   - `options?.onStep` — Called with `UnifiedLoginStep` names (see [Progress callbacks](#progress-callbacks)).
-- **Returns:** `UnifiedLoginResult` extending `LoginResult` with `address` and `registration` fields. `address` is the Taproot address used for the login (either `options.address` or the wallet-resolved address). `registration` is `null` when the user was already registered, or a `RegistrationResult` (`userId`, `xOnlyPubkey`, `blsPubkey`, `xpubkey`) when a registration was performed during this call.
+- **Returns:** `UnifiedLoginResult` extending `LoginResult` with:
+  - `address` — Taproot address used for the login (either `options.address` or the wallet-resolved address).
+  - `xOnlyPubkey` — x-only pubkey of the signer that just logged in. Always populated (sourced from the registration on the new-user path, or from the registry lookup on the already-registered path). Use this directly as `UploadOptions.xOnlyPubkey` — no follow-up `getSignerInfo()` round-trip required.
+  - `blsPubkey` — BLS public key of the signer. Same lifecycle as `xOnlyPubkey`. `null` only when the registry entry has no bound BLS key (should not happen for users that completed `client.login()`).
+  - `registration` — `null` when the user was already registered, or a `RegistrationResult` (`userId`, `xOnlyPubkey`, `blsPubkey`, `xpubkey`) when a registration was performed during this call.
 - **Throws:** `NetworkMismatchError` when the wallet network does not match the client's configured `walletNetwork` (only when `options.address` is omitted).
 
 ### `detectWalletNetwork()`
@@ -162,7 +169,13 @@ await client.login({ address: "bc1p..." });
     - a numeric Kontor `signer_id` (e.g. `"0"`),
     - an x-only public key in hex (64 hex chars), or
     - a Bitcoin address registered with the Portal (via `login()` or node registration).
-- **Returns:** `SignerInfo` — `{ signerId: number; nextNonce: number; chainNonce: number; userId?: string }`. `nextNonce` is the effective nonce after `NonceProvider.getNextNonce` arbitration; `chainNonce` is the raw value returned by the Portal registry (Portal-authoritative, used by `login()` to resync the local nonce tracker). `userId` is present when the registry entry resolves to a `users` row (lookup by Bitcoin address or x-only pubkey of a registered user). Sends `Authorization` when a JWT is present. Throws `PortalNotFoundError` on 404 (e.g. address not registered).
+- **Returns:** `SignerInfo` — `{ signerId: number; nextNonce: number; chainNonce: number; userId?: string; xOnlyPubkey: string; blsPubkey: string | null }`.
+  - `nextNonce` — effective nonce after `NonceProvider.getNextNonce` arbitration.
+  - `chainNonce` — raw value returned by the Portal registry (Portal-authoritative, used by `login()` to resync the local nonce tracker).
+  - `userId` — present when the registry entry resolves to a `users` row (lookup by Bitcoin address or x-only pubkey of a registered user).
+  - `xOnlyPubkey` — 64-char hex x-only public key of the signer, as recorded by Kontor. Always present.
+  - `blsPubkey` — BLS12-381 G1 public key (hex), or `null` when the registry entry has no bound BLS key (e.g. some node entries before `register_bls_key`).
+- Sends `Authorization` when a JWT is present. Throws `PortalNotFoundError` on 404 (e.g. address not registered). Throws a generic error when the registry response is malformed (missing `x_only_pubkey`).
 
 ### `uploadFile(file, options)`
 

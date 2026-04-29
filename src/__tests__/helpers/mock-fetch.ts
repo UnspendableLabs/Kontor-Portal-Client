@@ -96,6 +96,8 @@ export function createMockFetch(overrides: MockFetchOverrides = {}) {
             signer_id: 42,
             next_nonce: 5,
             user_id: "user-1",
+            x_only_pubkey: "ab".repeat(32),
+            bls_pubkey: "cd".repeat(48),
           })
         );
       }

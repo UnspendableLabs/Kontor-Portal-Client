@@ -119,19 +119,33 @@ export function PortalClientProvider({
         setTaprootAddress(result.address);
       }
 
-      if (result.registration) {
-        const reg = result.registration;
-        localStorage.setItem(STORAGE_KEYS.userId, reg.userId);
-        localStorage.setItem(STORAGE_KEYS.xpubkey, reg.xpubkey);
-        localStorage.setItem(STORAGE_KEYS.xOnlyPubkey, reg.xOnlyPubkey);
-        localStorage.setItem(STORAGE_KEYS.blsPubkey, reg.blsPubkey);
-        setPortalUserId(reg.userId);
-        setXpubkey(reg.xpubkey);
-        setXOnlyPubkey(reg.xOnlyPubkey);
-        setBlsPubkey(reg.blsPubkey);
-      } else if (!portalUserId) {
+      // Persist the userId on the already-registered path too: a fresh
+      // browser session may have a stale or missing `portal_user_id`.
+      if (!portalUserId || portalUserId !== result.userId) {
         localStorage.setItem(STORAGE_KEYS.userId, result.userId);
         setPortalUserId(result.userId);
+      }
+
+      // Persist xOnlyPubkey and blsPubkey on BOTH paths. On the
+      // already-registered path the values come from `getSignerInfo` (via
+      // the registry lookup performed inside `client.login()`), so callers
+      // that lost their `localStorage` (different browser, cleared cache,
+      // …) recover the xOnlyPubkey required by `uploadFile`.
+      localStorage.setItem(STORAGE_KEYS.xOnlyPubkey, result.xOnlyPubkey);
+      setXOnlyPubkey(result.xOnlyPubkey);
+      if (result.blsPubkey) {
+        localStorage.setItem(STORAGE_KEYS.blsPubkey, result.blsPubkey);
+        setBlsPubkey(result.blsPubkey);
+      }
+
+      // xpubkey is only known on the auto-register path (the registry
+      // entry does not carry it). Persist it when we have it.
+      if (result.registration) {
+        localStorage.setItem(
+          STORAGE_KEYS.xpubkey,
+          result.registration.xpubkey,
+        );
+        setXpubkey(result.registration.xpubkey);
       }
 
       localStorage.setItem(STORAGE_KEYS.jwt, result.jwt);
