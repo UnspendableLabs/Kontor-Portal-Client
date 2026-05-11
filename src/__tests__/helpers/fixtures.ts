@@ -80,6 +80,7 @@ export const AGREEMENT: Agreement = {
   txid: null,
   block_height: null,
   block_time: null,
+  thumbnail_url: `${PORTAL_HOST}/api/thumbnails/fallback?filename=test.txt`,
 };
 
 export const AGREEMENT_CONFIRMED: Agreement = {
@@ -96,6 +97,8 @@ export const AGREEMENT_CONFIRMED: Agreement = {
   txid: "a".repeat(64),
   block_height: 800000,
   block_time: 1700000000,
+  thumbnail_url:
+    "https://storage.googleapis.com/bucket/path/to/file.thumb.jpg?GoogleAccessId=test&Expires=9999&Signature=abc",
 };
 
 export const AGREEMENTS_RESPONSE: AgreementsResponse = {

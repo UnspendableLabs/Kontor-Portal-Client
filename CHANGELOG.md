@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4 (2026-05-11)
+
+### Features
+
+- **`Agreement.thumbnail_url`** — new optional string field on `Agreement` exposing a 400×400 preview asset for the file. Either a short-lived GCS V4 signed URL (auto-generated `*.thumb.jpg` for raster images, `*.thumb.svg` placeholder for other MIME types) or the public SVG fallback at `GET /api/thumbnails/fallback?filename=<filename>` for legacy rows or thumbnail-generation failures. Optional because older Portal deployments without thumbnail support omit this field — guard against `undefined` before use. Intended for previews only — does not replace `getDownloadUrl()` / `downloadFile()` for the original file bytes. Requires the Portal-side thumbnail support (`apiary.apib` "Thumbnails" change).
+
 ## 0.2.3 (2026-04-29)
 
 ### Fixes

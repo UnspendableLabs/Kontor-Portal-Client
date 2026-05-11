@@ -257,6 +257,17 @@ export interface Agreement {
   padded_len?: number;
   blob_size?: number;
   file_hash?: string;
+  /**
+   * URL of a 400x400 preview asset. Either a short-lived GCS V4 signed URL
+   * (auto-generated `*.thumb.jpg` for raster images, `*.thumb.svg`
+   * placeholder for other MIME types) or the public SVG fallback endpoint
+   * `GET /api/thumbnails/fallback?filename=<filename>` for legacy rows or
+   * thumbnail-generation failures. Optional: only populated when the Portal
+   * has thumbnail support deployed; treat as `undefined` on older Portals.
+   * Intended for previews only — does NOT replace
+   * `GET /api/agreements/{id}/download` for the original file.
+   */
+  thumbnail_url?: string;
 }
 
 export interface AgreementsResponse {

@@ -195,7 +195,7 @@ await client.login({ address: "bc1p..." });
 - **Description:** GETs a single agreement by ID. **Public endpoint** — no JWT required (you do not need to call `setJwt()` first; any stored JWT is ignored for this call).
 - **Parameters:**
   - `agreementId` — The agreement ID to fetch.
-- **Returns:** `Agreement` (see fields below, including on-chain `txid`, `block_height`, `block_time`). Throws if not found (404) or on other errors.
+- **Returns:** `Agreement` (see fields below, including on-chain `txid`, `block_height`, `block_time`, and the optional `thumbnail_url` for previews). Throws if not found (404) or on other errors.
 
 ### `listAgreements(options?)`
 
@@ -213,6 +213,8 @@ await client.login({ address: "bc1p..." });
 - **Returns:** `AgreementsResponse` with `offset`, `limit`, `total`, and `agreements[]`.
 
 The `Agreement` type includes the on-chain fields `txid` (Bitcoin transaction id, hex), `block_height`, and `block_time` (Unix timestamp in seconds). All three are nullable until the agreement is confirmed on-chain. The internal `transaction_id` (UUID) remains available for backward compatibility.
+
+It also exposes an optional `thumbnail_url` pointing at a 400×400 preview asset — either a short-lived GCS V4 signed URL (`*.thumb.jpg` for raster images, `*.thumb.svg` placeholder for other MIME types) or the public SVG fallback at `GET /api/thumbnails/fallback?filename=<filename>` for legacy rows. The field is `undefined` on older Portal deployments without thumbnail support, so guard against that before rendering. Use it directly in `<img>` tags for previews; it does **not** replace `getDownloadUrl()` / `downloadFile()` for the original file bytes.
 
 ### `getDownloadUrl(agreementId, options?)`
 
