@@ -11,6 +11,7 @@ import {
   buildRegistrationMessage,
   buildCreateAgreementMessage,
   buildCreateAgreementExpr,
+  buildMintNftExpr,
   computeCryptoParams,
   DEFAULT_GAS_LIMIT,
   KONTOR_BLS_DST,
@@ -188,6 +189,119 @@ describe("buildCreateAgreementExpr", () => {
     expect(expr).toContain("original-size: 100");
     expect(expr).toContain('filename: "test.txt"');
     expect(expr).toMatch(/^create-agreement\(/);
+  });
+
+  it("escapes backslashes and quotes in string fields", () => {
+    const expr = buildCreateAgreementExpr(
+      "fid-1",
+      "hash-1",
+      "aabb",
+      512,
+      100,
+      'weird "name".txt',
+    );
+    expect(expr).toContain('filename: "weird \\"name\\".txt"');
+  });
+});
+
+describe("buildMintNftExpr", () => {
+  it("renders empty attributes as []", () => {
+    const expr = buildMintNftExpr(
+      "nft_42",
+      [],
+      "fid-1",
+      "hash-1",
+      "aabb",
+      512,
+      100,
+      "test.txt",
+    );
+    expect(expr.startsWith('mint("nft_42", [], {file-id: ')).toBe(true);
+    expect(expr).toContain('file-id: "fid-1"');
+    expect(expr).toContain('object-id: "hash-1"');
+    expect(expr).toContain("root: [170, 187]");
+    expect(expr).toContain("padded-len: 512");
+    expect(expr).toContain("original-size: 100");
+    expect(expr).toContain('filename: "test.txt"');
+  });
+
+  it("renders one attribute with exact spacing", () => {
+    const expr = buildMintNftExpr(
+      "nft_42",
+      [{ key: "artist", value: "Leonardo" }],
+      "fid-1",
+      "hash-1",
+      "aabb",
+      512,
+      100,
+      "test.txt",
+    );
+    expect(expr).toContain('[{key: "artist", value: "Leonardo"}]');
+  });
+
+  it("renders two attributes with `, ` separator", () => {
+    const expr = buildMintNftExpr(
+      "nft_42",
+      [
+        { key: "k1", value: "v1" },
+        { key: "k2", value: "v2" },
+      ],
+      "fid-1",
+      "hash-1",
+      "aabb",
+      512,
+      100,
+      "test.txt",
+    );
+    expect(expr).toContain(
+      '[{key: "k1", value: "v1"}, {key: "k2", value: "v2"}]',
+    );
+  });
+
+  it("escapes `\\` and `\"` in nftId, attribute key, attribute value, and filename", () => {
+    const expr = buildMintNftExpr(
+      'a"b\\c',
+      [{ key: 'k"\\', value: 'v"\\' }],
+      "fid-1",
+      "hash-1",
+      "aabb",
+      512,
+      100,
+      'na"me\\.txt',
+    );
+    expect(expr).toContain('mint("a\\"b\\\\c"');
+    expect(expr).toContain('{key: "k\\"\\\\", value: "v\\"\\\\"}');
+    expect(expr).toContain('filename: "na\\"me\\\\.txt"');
+  });
+
+  it("renders the merkle root as a decimal byte list", () => {
+    const expr = buildMintNftExpr(
+      "nft_42",
+      [],
+      "fid-1",
+      "hash-1",
+      "aabb",
+      512,
+      100,
+      "test.txt",
+    );
+    expect(expr).toContain("root: [170, 187]");
+  });
+
+  it("matches the Rust doc-test substring shape", () => {
+    const expr = buildMintNftExpr(
+      "nft_42",
+      [{ key: "k", value: "v" }],
+      "file_abc",
+      "obj_abc",
+      "aabb",
+      32,
+      2048,
+      "test.png",
+    );
+    expect(expr.startsWith('mint("nft_42", ')).toBe(true);
+    expect(expr).toContain('{key: "k", value: "v"}');
+    expect(expr).toContain('file-id: "file_abc"');
   });
 });
 

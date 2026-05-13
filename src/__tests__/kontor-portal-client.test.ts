@@ -19,6 +19,11 @@ import {
   DOWNLOAD_FILE_CONTENT,
 } from "./helpers/fixtures";
 import type { KontorPortalClientConfig, NonceProvider } from "../types";
+import {
+  buildCreateAgreementMessage,
+  buildMintNftExpr,
+  bytesToHex,
+} from "../postcard";
 
 function makeClient(overrides?: Partial<KontorPortalClientConfig>) {
   return new KontorPortalClient({
@@ -956,7 +961,56 @@ describe("KontorPortalClient", () => {
       client.setJwt(makeJwt());
       await expect(
         client.uploadFile(makeFile(), uploadOpts()),
-      ).rejects.toThrow("Upload initiation failed");
+      ).rejects.toThrow("Upload initiation failed (429)");
+    });
+
+    it("surfaces Portal `error.message` from a JSON 400 response", async () => {
+      mockFetch = createMockFetch({
+        filesPost: () =>
+          jsonResponse(
+            {
+              error: {
+                code: "INVALID_REQUEST",
+                message: "nft_id cannot be empty",
+                status: 400,
+              },
+            },
+            400,
+          ),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const client = makeClient();
+      client.setJwt(makeJwt());
+      await expect(
+        client.uploadFile(makeFile(), uploadOpts()),
+      ).rejects.toThrow("nft_id cannot be empty");
+    });
+
+    it("surfaces Portal `error.message` from a JSON 409 NFT_ALREADY_MINTED response", async () => {
+      mockFetch = createMockFetch({
+        filesPost: () =>
+          jsonResponse(
+            {
+              error: {
+                code: "NFT_ALREADY_MINTED",
+                message: "NFT mona-lisa-001 is already used by another mint",
+                status: 409,
+              },
+            },
+            409,
+          ),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const client = makeClient();
+      client.setJwt(makeJwt());
+      await expect(
+        client.uploadFile(
+          makeFile(),
+          uploadOpts({ nft: { nftId: "mona-lisa-001" } }),
+        ),
+      ).rejects.toThrow("NFT mona-lisa-001 is already used by another mint");
     });
 
     it("throws when upload URL is missing", async () => {
@@ -1023,6 +1077,122 @@ describe("KontorPortalClient", () => {
 
       await client.uploadFile(makeFile(), uploadOpts());
       expect(reportSpy).toHaveBeenCalledWith(42, 5);
+    });
+
+    describe("with NFT mint payload", () => {
+      it("includes nft in the request body and signs over mint(...) with the default NFT contract", async () => {
+        const signer = createMockSigner();
+        const client = makeClient({ signer });
+        client.setJwt(makeJwt());
+
+        await client.uploadFile(
+          makeFile(),
+          uploadOpts({
+            nft: {
+              nftId: "nft-1",
+              attributes: [{ key: "k", value: "v" }],
+            },
+          }),
+        );
+
+        const filesCall = mockFetch.mock.calls.find(
+          (c) =>
+            String(c[0]).includes("/api/files") &&
+            (c[1]?.method ?? "").toUpperCase() === "POST",
+        );
+        const body = JSON.parse(filesCall?.[1]?.body as string);
+        expect(body.files[0].nft).toEqual({
+          nft_id: "nft-1",
+          attributes: [{ key: "k", value: "v" }],
+        });
+
+        const expectedExpr = buildMintNftExpr(
+          "nft-1",
+          [{ key: "k", value: "v" }],
+          PREPARE_RESULT.metadata.fileId,
+          PREPARE_RESULT.metadata.objectId,
+          PREPARE_RESULT.metadata.root,
+          PREPARE_RESULT.metadata.paddedLen,
+          11,
+          "test.txt",
+        );
+        const expectedMessage = buildCreateAgreementMessage(
+          42,
+          5,
+          "nft_0_0",
+          expectedExpr,
+        );
+        expect(signer.signBLS).toHaveBeenCalledWith(
+          expect.objectContaining({
+            messageHex: bytesToHex(expectedMessage),
+          }),
+        );
+      });
+
+      it("uses the configured kontorNftContractAddress when overridden", async () => {
+        const signer = createMockSigner();
+        const client = makeClient({
+          signer,
+          kontorNftContractAddress: "nft_test_42",
+        });
+        client.setJwt(makeJwt());
+
+        await client.uploadFile(
+          makeFile(),
+          uploadOpts({
+            nft: {
+              nftId: "nft-1",
+              attributes: [],
+            },
+          }),
+        );
+
+        const expectedExpr = buildMintNftExpr(
+          "nft-1",
+          [],
+          PREPARE_RESULT.metadata.fileId,
+          PREPARE_RESULT.metadata.objectId,
+          PREPARE_RESULT.metadata.root,
+          PREPARE_RESULT.metadata.paddedLen,
+          11,
+          "test.txt",
+        );
+        const expectedMessage = buildCreateAgreementMessage(
+          42,
+          5,
+          "nft_test_42",
+          expectedExpr,
+        );
+        expect(signer.signBLS).toHaveBeenCalledWith(
+          expect.objectContaining({
+            messageHex: bytesToHex(expectedMessage),
+          }),
+        );
+      });
+
+      it("defaults missing attributes to [] in both expr and request body", async () => {
+        const signer = createMockSigner();
+        const client = makeClient({ signer });
+        client.setJwt(makeJwt());
+
+        await client.uploadFile(
+          makeFile(),
+          uploadOpts({
+            nft: { nftId: "nft-2" },
+          }),
+        );
+
+        const filesCall = mockFetch.mock.calls.find(
+          (c) =>
+            String(c[0]).includes("/api/files") &&
+            (c[1]?.method ?? "").toUpperCase() === "POST",
+        );
+        const body = JSON.parse(filesCall?.[1]?.body as string);
+        expect(body.files[0].nft).toEqual({
+          nft_id: "nft-2",
+          attributes: [],
+        });
+      });
     });
   });
 

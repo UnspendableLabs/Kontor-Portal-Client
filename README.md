@@ -55,6 +55,7 @@ const client = new KontorPortalClient({
   network: networks.bitcoin, // default: signet (testnet)
   walletNetwork: "mainnet", // default: derived from `network` (mainnet | signet)
   kontorContractAddress: "my_contract", // default: "filestorage_0_0"
+  kontorNftContractAddress: "my_nft_contract", // default: "nft_0_0"
   // signer: myCustomSigner, // default: new HorizonWalletSigner()
   // crypto: myCustomCrypto, // default: WASM via @kontor/kontor-crypto
   // wasmUrl: "/custom/path/index.js", // default: "/kontor-crypto/index.js"
@@ -107,6 +108,22 @@ const uploadResult = await client.uploadFile(file, {
 ```
 
 `uploadFile` requires a prior successful `login()` (or a JWT set with `setJwt`) because uploads use authenticated portal APIs.
+
+### Uploading with an NFT mint
+
+`uploadFile` accepts an optional `nft` payload that mints a Kontor NFT in the same Bitcoin operation as the agreement creation. When `nft` is set, the BLS signature is built over the NFT contract's `mint(...)` instead of the filestorage contract's `create-agreement(...)`. The NFT contract address is configured at client init via `KontorPortalClientConfig.kontorNftContractAddress` (default `"nft_0_0"`) and is not overridable per call.
+
+```typescript
+const uploadResult = await client.uploadFile(file, {
+  xOnlyPubkey: result.xOnlyPubkey,
+  nft: {
+    nftId: "mona-lisa-001",
+    attributes: [{ key: "artist", value: "Leonardo" }],
+  },
+});
+```
+
+The resulting on-chain `agreement_id` equals the `file_id` (the NFT contract's `mint` invokes `filestorage::create_agreement` internally), and the Portal creates an `nft_mints` row in the same database transaction whose status mirrors the agreement (`ready` → `pending` → `confirmed`).
 
 ### Network validation
 
@@ -188,6 +205,24 @@ await client.login({ address: "bc1p..." });
   - `options.tags` — Optional string tags for the file.
   - `options.onStep`, `options.onPrepareProgress`, `options.onUploadProgress` — See [Progress callbacks](#progress-callbacks).
 - **Returns:** `UploadResult` with `sessionId`, `fileId`, `merkleRoot`, `filename`, and `size`.
+
+#### Uploading with an NFT mint
+
+Pass an `nft` payload to `uploadFile` to mint a Kontor NFT in the same Bitcoin operation that creates the file's agreement. The BLS signature is built over the NFT contract's `mint(...)` entrypoint (instead of `create-agreement(...)`), so a single signed op covers both the NFT record and its backing agreement.
+
+The NFT contract address is configured at client init via `KontorPortalClientConfig.kontorNftContractAddress` (default `"nft_0_0"`); it is not overridable per call.
+
+```typescript
+const result = await client.uploadFile(file, {
+  xOnlyPubkey,
+  nft: {
+    nftId: "mona-lisa-001",
+    attributes: [{ key: "artist", value: "Leonardo" }],
+  },
+});
+```
+
+The resulting on-chain `agreement_id` equals the `file_id`. Portal-side, an `nft_mints` row is created in the same transaction as the agreement and mirrors its status (`ready` → `pending` → `confirmed`, or `failed` if the mint op did not land on Kontor).
 
 ### `getAgreement(agreementId)`
 

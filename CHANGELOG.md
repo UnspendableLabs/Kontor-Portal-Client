@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+## 0.2.5 (2026-05-13)
+
+### Features
+
+- **`UploadOptions.nft`** — new optional payload on `uploadFile` that mints a Kontor NFT in the same Bitcoin operation as the agreement creation. When `nft` is set, the BLS signature is built over the NFT contract's `mint(nft_id, attributes, file_descriptor)` entrypoint instead of `create-agreement(...)`, and the on-chain `agreement_id` equals the `file_id`. The Portal creates an `nft_mints` row in the same database transaction as the agreement, mirroring its status (`ready` → `pending` → `confirmed`, or `failed`). Shape: `{ nftId: string; attributes?: Array<{ key: string; value: string }> }` — `attributes` defaults to `[]` and order is preserved end-to-end.
+- **`KontorPortalClientConfig.kontorNftContractAddress`** — new optional config field for the Kontor NFT contract address used by NFT mints. Defaults to `"nft_0_0"`. Set at client init only; not overridable per call.
+- **`buildMintNftExpr` exported helper** — builds the WAVE expression for the NFT contract's `mint(...)` entrypoint. Byte-for-byte parity with the Rust `build_mint_nft_expr` in `kontor_op.rs` so Portal-side BLS verification can reconstruct the exact signed string.
+- **New exported types** — `NftAttribute`, `NftMintRequest`.
+
+### Fixes
+
+- **WAVE string escaping in `create-agreement(...)` and `mint(...)` exprs** — `file-id`, `object-id`, and `filename` are now escaped (`\` → `\\`, `"` → `\"`) before being interpolated into the signed WAVE expression, matching the Rust `wave_escape_string` helper in `kontor_op.rs`. Without this, filenames or file IDs containing `"` or `\` produced a malformed expression that Portal-side BLS verification rejected. Pure client-side fix; no Portal change required.
+- **Upload initiation now surfaces the Portal's structured error message** — `POST /api/files` failures previously threw `Error("Upload initiation failed: <status> <body>")`, leaking the raw response body into the message. They now flow through the same response-parsing path as the rest of the client: when the Portal returns a JSON envelope (`{ error: { message } }` or `{ error: <string> }`), the thrown `Error.message` is the Portal-supplied message; otherwise it falls back to `Upload initiation failed (<status>)`. Existing `try/catch` on the thrown error keeps working.
+
 ## 0.2.4 (2026-05-11)
 
 ### Features
