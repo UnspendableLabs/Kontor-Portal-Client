@@ -23,6 +23,8 @@ export type {
   UnifiedLoginOptions,
   UnifiedLoginResult,
   UploadResult,
+  NftAttribute,
+  NftMintRequest,
   Agreement,
   AgreementsResponse,
   ListAgreementsOptions,
@@ -39,6 +41,7 @@ export type {
 
 export {
   buildRegistrationMessage,
+  buildMintNftExpr,
   bytesToHex,
   hexToBytes,
   KONTOR_BLS_DST,

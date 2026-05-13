@@ -25,6 +25,7 @@ import {
   buildRegistrationMessage,
   buildCreateAgreementMessage,
   buildCreateAgreementExpr,
+  buildMintNftExpr,
   computeCryptoParams,
   bytesToHex,
   KONTOR_BLS_DST,
@@ -37,6 +38,7 @@ import { networks } from "bitcoinjs-lib";
 
 const CHUNK_SIZE = 256 * 1024; // 256 KiB
 const DEFAULT_CONTRACT = "filestorage_0_0";
+const DEFAULT_NFT_CONTRACT = "nft_0_0";
 
 /**
  * Tracks the highest nonce used per signer in memory. Prevents nonce reuse
@@ -64,6 +66,7 @@ export class InMemoryNonceProvider implements NonceProvider {
 export class KontorPortalClient {
   private readonly portalHost: string;
   private readonly kontorContractAddress: string;
+  private readonly kontorNftContractAddress: string;
   private readonly network: Network;
   private readonly walletNetwork: WalletNetwork;
   private readonly validationDelayMs: number;
@@ -76,6 +79,8 @@ export class KontorPortalClient {
     this.portalHost = config.portalHost;
     this.kontorContractAddress =
       config.kontorContractAddress ?? DEFAULT_CONTRACT;
+    this.kontorNftContractAddress =
+      config.kontorNftContractAddress ?? DEFAULT_NFT_CONTRACT;
     this.network = config.network ?? networks.testnet;
     this.walletNetwork =
       config.walletNetwork ??
@@ -504,19 +509,35 @@ export class KontorPortalClient {
       prepareResult.metadata.paddedLen,
     );
 
-    const expr = buildCreateAgreementExpr(
-      prepareResult.metadata.fileId,
-      prepareResult.metadata.objectId,
-      prepareResult.metadata.root,
-      prepareResult.metadata.paddedLen,
-      file.size,
-      file.name,
-    );
+    const nftRequest = options.nft;
+    const expr = nftRequest
+      ? buildMintNftExpr(
+          nftRequest.nftId,
+          nftRequest.attributes ?? [],
+          prepareResult.metadata.fileId,
+          prepareResult.metadata.objectId,
+          prepareResult.metadata.root,
+          prepareResult.metadata.paddedLen,
+          file.size,
+          file.name,
+        )
+      : buildCreateAgreementExpr(
+          prepareResult.metadata.fileId,
+          prepareResult.metadata.objectId,
+          prepareResult.metadata.root,
+          prepareResult.metadata.paddedLen,
+          file.size,
+          file.name,
+        );
+
+    const signedContract = nftRequest
+      ? this.kontorNftContractAddress
+      : this.kontorContractAddress;
 
     const messageBytes = buildCreateAgreementMessage(
       signerId,
       nextNonce,
-      this.kontorContractAddress,
+      signedContract,
       expr,
     );
 
@@ -529,37 +550,45 @@ export class KontorPortalClient {
 
     const mimeType = file.type || "application/octet-stream";
 
+    const fileEntry: Record<string, unknown> = {
+      filename: file.name,
+      mime_type: mimeType,
+      tags: options.tags ?? [],
+      size: file.size,
+      crypto: {
+        file_id: prepareResult.metadata.fileId,
+        file_hash: prepareResult.metadata.objectId,
+        merkle_root: prepareResult.metadata.root,
+        padded_len: prepareResult.metadata.paddedLen,
+        data_symbols: dataSymbols,
+        parity_symbols: paritySymbols,
+        blob_size: blobSize,
+      },
+      bls_signature: blsSignature,
+      nonce: nextNonce,
+    };
+
+    if (nftRequest) {
+      fileEntry.nft = {
+        nft_id: nftRequest.nftId,
+        attributes: (nftRequest.attributes ?? []).map((a) => ({
+          key: a.key,
+          value: a.value,
+        })),
+      };
+    }
+
     options.onStep?.("initiating");
     const initResponse = await this.portalFetch("/api/files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        files: [
-          {
-            filename: file.name,
-            mime_type: mimeType,
-            tags: options.tags ?? [],
-            size: file.size,
-            crypto: {
-              file_id: prepareResult.metadata.fileId,
-              file_hash: prepareResult.metadata.objectId,
-              merkle_root: prepareResult.metadata.root,
-              padded_len: prepareResult.metadata.paddedLen,
-              data_symbols: dataSymbols,
-              parity_symbols: paritySymbols,
-              blob_size: blobSize,
-            },
-            bls_signature: blsSignature,
-            nonce: nextNonce,
-          },
-        ],
-      }),
+      body: JSON.stringify({ files: [fileEntry] }),
     });
 
     if (!initResponse.ok) {
-      const errorText = await initResponse.text();
-      throw new Error(
-        `Upload initiation failed: ${initResponse.status} ${errorText}`,
+      await KontorPortalClient.throwResponseError(
+        initResponse,
+        `Upload initiation failed (${initResponse.status})`,
       );
     }
 

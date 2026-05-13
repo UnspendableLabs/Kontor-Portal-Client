@@ -88,6 +88,8 @@ export interface KontorPortalClientConfig {
   portalHost: string;
   /** Defaults to `"filestorage_0_0"`. */
   kontorContractAddress?: string;
+  /** Defaults to `"nft_0_0"`. */
+  kontorNftContractAddress?: string;
   /** Defaults to signet (`testnet` from bitcoinjs-lib). */
   network?: Network;
   /**
@@ -125,6 +127,18 @@ export interface LoginOptions {
   onStep?: (step: LoginStep) => void;
 }
 
+export interface NftAttribute {
+  key: string;
+  value: string;
+}
+
+export interface NftMintRequest {
+  /** Caller-chosen NFT identifier; the Portal enforces uniqueness. */
+  nftId: string;
+  /** Defaults to `[]` when omitted. Order is preserved end-to-end. */
+  attributes?: NftAttribute[];
+}
+
 /**
  * `onPrepareProgress`: `progress` is in the range 0–1 (inclusive), paired with
  * the current `phase` from kontor-crypto preparation (same contract as
@@ -137,6 +151,13 @@ export interface UploadOptions {
   onStep?: (step: UploadStep) => void;
   onPrepareProgress?: (progress: number, phase: ProgressPhase) => void;
   onUploadProgress?: (bytesUploaded: number, totalBytes: number) => void;
+  /**
+   * When present, the upload mints an NFT on the Kontor NFT contract (default
+   * `"nft_0_0"`, see {@link KontorPortalClientConfig.kontorNftContractAddress}).
+   * The BLS signature is built over `mint(...)` instead of `create-agreement(...)`,
+   * and the on-chain `agreement_id` will equal the `file_id`.
+   */
+  nft?: NftMintRequest;
 }
 
 export interface RegistrationResult {

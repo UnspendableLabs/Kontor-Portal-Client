@@ -11,6 +11,7 @@
  *
  * @see https://github.com/jamesmunns/postcard
  */
+import type { NftAttribute } from "./types";
 
 /**
  * Encodes a number as a varint (variable-length integer).
@@ -143,6 +144,17 @@ export function buildKontorOpMessage(opBytes: Uint8Array): Uint8Array {
   return concat(KONTOR_OP_PREFIX, opBytes);
 }
 
+/**
+ * Escapes `\` and `"` for inclusion inside a WAVE string literal. Order matters:
+ * the backslash replacement must run BEFORE the quote replacement, otherwise the
+ * backslashes injected by the quote step would be double-escaped.
+ *
+ * Mirrors Rust `wave_escape_string` in `kontor_op.rs`.
+ */
+function waveEscapeString(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 export function buildCreateAgreementExpr(
   fileId: string,
   fileHash: string,
@@ -152,7 +164,39 @@ export function buildCreateAgreementExpr(
   filename: string,
 ): string {
   const rootBytes = Array.from(hexToBytes(merkleRootHex)).join(', ');
-  return `create-agreement({file-id: "${fileId}", object-id: "${fileHash}", nonce: [], root: [${rootBytes}], padded-len: ${paddedLen}, original-size: ${originalSize}, filename: "${filename}"})`;
+  return `create-agreement({file-id: "${waveEscapeString(fileId)}", object-id: "${waveEscapeString(fileHash)}", nonce: [], root: [${rootBytes}], padded-len: ${paddedLen}, original-size: ${originalSize}, filename: "${waveEscapeString(filename)}"})`;
+}
+
+/**
+ * Builds the WAVE expression for the NFT contract's
+ * `mint(nft_id, attributes, file_descriptor)` entrypoint.
+ *
+ * Must match Rust `build_mint_nft_expr` in `kontor_op.rs` byte-for-byte —
+ * BLS verification on the Portal side reconstructs this exact string.
+ */
+export function buildMintNftExpr(
+  nftId: string,
+  attributes: NftAttribute[],
+  fileId: string,
+  fileHash: string,
+  merkleRootHex: string,
+  paddedLen: number,
+  originalSize: number,
+  filename: string,
+): string {
+  const attrsStr =
+    attributes.length === 0
+      ? '[]'
+      : '[' +
+        attributes
+          .map(
+            (a) =>
+              `{key: "${waveEscapeString(a.key)}", value: "${waveEscapeString(a.value)}"}`,
+          )
+          .join(', ') +
+        ']';
+  const rootBytes = Array.from(hexToBytes(merkleRootHex)).join(', ');
+  return `mint("${waveEscapeString(nftId)}", ${attrsStr}, {file-id: "${waveEscapeString(fileId)}", object-id: "${waveEscapeString(fileHash)}", nonce: [], root: [${rootBytes}], padded-len: ${paddedLen}, original-size: ${originalSize}, filename: "${waveEscapeString(filename)}"})`;
 }
 
 // --- Full signing message builders ---
