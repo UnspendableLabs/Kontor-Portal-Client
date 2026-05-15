@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## 0.2.6-rc.1 (2026-05-15)
+
+### Breaking changes
+
+- **`Agreement.nodes` is now `AgreementNode[]` instead of `string[]`** — each entry is now `{ node_id: string; status: "valid" | "failed" }` instead of a bare node ID string. Consumers iterating `agreement.nodes` must update to `.node_id` for the ID and may now inspect `.status` to distinguish nodes whose `join_agreement` op was rejected on-chain.
+- **`DEFAULT_GAS_LIMIT` removed** — this constant and its re-export are gone. The new signing format (`PaymentIntent::Sponsored`) does not include a gas limit field; the Portal pays gas as publisher-sponsor.
+
+### Features
+
+- **New exported type `AgreementNode`** — `{ node_id: string; status: "valid" | "failed" }`.
+- **`Agreement.status` now includes `"failed"`** — replaces `"completed"` in the union, matching the server's `AgreementStatus` (`pending | ready | confirmed | failed`). A `failed` agreement means the Bitcoin transaction was confirmed but the Kontor `create_agreement` op did not land.
+
+### Fixes
+
+- **Registration message now encodes x-only pubkey as 32 raw bytes** — `buildRegistrationMessage` previously encoded the x-only public key as a 64-character hex ASCII string. It now encodes it as 32 raw bytes (with postcard-compatible length prefix), matching the Rust `SignerClaim::PubKey(XOnlyPublicKey)` non-human-readable serde representation.
+- **Signing message format updated to `(SignerClaim, nonce, Inst)` tuple** — both `buildRegistrationMessage` and `buildCreateAgreementMessage` now emit `KONTOR-OP-V1 || postcard((claim, nonce, Inst { payment, kind }))`, matching the Rust `Inst::aggregate_signing_message`. The old format used a legacy `BlsBulkOp` wrapper with an embedded `gas_limit` field that no longer exists in the protocol.
+- **BLS public key type corrected to G2** — `SignerInfo.blsPubkey` doc comment updated from G1 to G2 (192 hex chars = 96 bytes), matching the Portal API and Kontor registry.
+
 ## 0.2.5 (2026-05-13)
 
 ### Features

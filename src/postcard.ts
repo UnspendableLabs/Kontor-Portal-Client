@@ -2,12 +2,13 @@
  * Postcard-compatible binary serialization for Kontor BLS ops.
  *
  * Postcard is a Rust crate for compact binary serialization using varint encoding.
- * This module encodes instructions and `BlsBulkOp` variants for
- * `KONTOR-OP-V1 || postcard(...)` signing.
+ * This module encodes `(SignerClaim, nonce, Inst)` tuples for
+ * `KONTOR-OP-V1 || postcard((claim, nonce, inst))` signing.
  *
  * Format:
  * - Strings: varint length + UTF-8 bytes
- * - Vectors: varint length + each element encoded
+ * - Bytes: varint length + raw bytes
+ * - Enums: varint variant index + fields
  *
  * @see https://github.com/jamesmunns/postcard
  */
@@ -56,8 +57,6 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
 
 // --- Kontor protocol constants ---
 
-export const DEFAULT_GAS_LIMIT = 100_000;
-
 /** BLS DST used for Kontor protocol operations (create_agreement, register, etc.) */
 export const KONTOR_BLS_DST = 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_';
 
@@ -97,45 +96,6 @@ export function bytesToHex(bytes: Uint8Array): string {
 /** Encodes Vec<u8>: varint length prefix + raw bytes. */
 export function encodeBytes(bytes: Uint8Array): Uint8Array {
   return concat(encodeVarint(bytes.length), bytes);
-}
-
-// --- Kontor enum serializers ---
-// Enum variants are encoded as varint index followed by fields (Postcard/serde convention).
-
-export function encodeSignerXOnlyPubKey(xOnlyHex: string): Uint8Array {
-  return concat(encodeVarint(1), encodeString(xOnlyHex));
-}
-
-export function encodeBlsBulkOpCall(
-  signerId: number | bigint,
-  nonce: number | bigint,
-  gasLimit: number | bigint,
-  contract: string,
-  expr: string,
-): Uint8Array {
-  return concat(
-    encodeVarint(0),
-    encodeU64Varint(signerId),
-    encodeU64Varint(nonce),
-    encodeU64Varint(gasLimit),
-    encodeString(contract),
-    encodeString(expr),
-  );
-}
-
-export function encodeBlsBulkOpRegisterBlsKey(
-  xOnlyPubKeyHex: string,
-  blsPubkeyHex: string,
-  schnorrSigHex: string,
-  blsSigHex: string,
-): Uint8Array {
-  return concat(
-    encodeVarint(1),
-    encodeSignerXOnlyPubKey(xOnlyPubKeyHex),
-    encodeBytes(hexToBytes(blsPubkeyHex)),
-    encodeBytes(hexToBytes(schnorrSigHex)),
-    encodeBytes(hexToBytes(blsSigHex)),
-  );
 }
 
 // --- High-level message builders ---
@@ -201,33 +161,41 @@ export function buildMintNftExpr(
 
 // --- Full signing message builders ---
 
+// Builds: KONTOR-OP-V1 || postcard((SignerClaim::PubKey(xonly), 0, Inst { Sponsored, RegisterBlsKey }))
 export function buildRegistrationMessage(
   xOnlyPubKeyHex: string,
   blsPubkeyHex: string,
   schnorrSigHex: string,
   blsSigHex: string,
 ): Uint8Array {
-  const opBytes = encodeBlsBulkOpRegisterBlsKey(
-    xOnlyPubKeyHex,
-    blsPubkeyHex,
-    schnorrSigHex,
-    blsSigHex,
+  const opBytes = concat(
+    encodeVarint(1),                          // SignerClaim::PubKey variant
+    encodeBytes(hexToBytes(xOnlyPubKeyHex)),  // 32 raw bytes with length prefix
+    encodeU64Varint(0),                       // nonce = 0 (first-time registration)
+    encodeVarint(1),                          // PaymentIntent::Sponsored variant
+    encodeVarint(3),                          // InstKind::RegisterBlsKey variant
+    encodeBytes(hexToBytes(blsPubkeyHex)),
+    encodeBytes(hexToBytes(schnorrSigHex)),
+    encodeBytes(hexToBytes(blsSigHex)),
   );
   return buildKontorOpMessage(opBytes);
 }
 
+// Builds: KONTOR-OP-V1 || postcard((SignerClaim::Id(signer_id), nonce, Inst { Sponsored, Call { contract, expr } }))
 export function buildCreateAgreementMessage(
   signerId: number | bigint,
   nonce: number | bigint,
   contract: string,
   expr: string,
 ): Uint8Array {
-  const opBytes = encodeBlsBulkOpCall(
-    signerId,
-    nonce,
-    DEFAULT_GAS_LIMIT,
-    contract,
-    expr,
+  const opBytes = concat(
+    encodeVarint(0),           // SignerClaim::Id variant
+    encodeU64Varint(signerId),
+    encodeU64Varint(nonce),
+    encodeVarint(1),           // PaymentIntent::Sponsored variant
+    encodeVarint(1),           // InstKind::Call variant
+    encodeString(contract),
+    encodeString(expr),
   );
   return buildKontorOpMessage(opBytes);
 }

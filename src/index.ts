@@ -25,6 +25,7 @@ export type {
   UploadResult,
   NftAttribute,
   NftMintRequest,
+  AgreementNode,
   Agreement,
   AgreementsResponse,
   ListAgreementsOptions,
@@ -45,7 +46,6 @@ export {
   bytesToHex,
   hexToBytes,
   KONTOR_BLS_DST,
-  DEFAULT_GAS_LIMIT,
 } from "./postcard";
 
 export { getXOnlyPubkeyHexFromXpub } from "./xpub-utils";
