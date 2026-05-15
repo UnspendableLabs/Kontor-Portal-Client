@@ -195,8 +195,8 @@ export interface SignerInfo {
    */
   xOnlyPubkey: string;
   /**
-   * BLS12-381 G1 public key (hex). `null` when the registry entry exists
-   * but no BLS key has been bound yet (e.g. some node entries before
+   * BLS12-381 G2 public key (192 hex chars = 96 bytes). `null` when the registry
+   * entry exists but no BLS key has been bound yet (e.g. some node entries before
    * `register_bls_key`).
    */
   blsPubkey: string | null;
@@ -257,6 +257,11 @@ export interface UploadResult {
   size: number;
 }
 
+export interface AgreementNode {
+  node_id: string;
+  status: "valid" | "failed";
+}
+
 export interface Agreement {
   agreement_id: string;
   user_id: string;
@@ -265,8 +270,8 @@ export interface Agreement {
   mime_type: string;
   original_size: number;
   created_at: string;
-  status: "pending" | "ready" | "confirmed" | "completed" | (string & {});
-  nodes: string[];
+  status: "pending" | "ready" | "confirmed" | "failed" | (string & {});
+  nodes: AgreementNode[];
   transaction_id?: string;
   txid?: string | null;
   block_height?: number | null;

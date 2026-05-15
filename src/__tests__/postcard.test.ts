@@ -4,16 +4,12 @@ import {
   hexToBytes,
   bytesToHex,
   encodeBytes,
-  encodeSignerXOnlyPubKey,
-  encodeBlsBulkOpCall,
-  encodeBlsBulkOpRegisterBlsKey,
   buildKontorOpMessage,
   buildRegistrationMessage,
   buildCreateAgreementMessage,
   buildCreateAgreementExpr,
   buildMintNftExpr,
   computeCryptoParams,
-  DEFAULT_GAS_LIMIT,
   KONTOR_BLS_DST,
 } from "../postcard";
 
@@ -62,12 +58,6 @@ describe("encodeU64Varint", () => {
       new Uint8Array([0x80, 0x01]),
     );
   });
-
-  it("encodes DEFAULT_GAS_LIMIT (100000)", () => {
-    const encoded = encodeU64Varint(DEFAULT_GAS_LIMIT);
-    expect(encoded.length).toBeGreaterThan(1);
-    expect(encoded[0] & 0x80).toBe(0x80);
-  });
 });
 
 describe("encodeBytes", () => {
@@ -92,48 +82,6 @@ describe("encodeBytes", () => {
   });
 });
 
-describe("encodeSignerXOnlyPubKey", () => {
-  it("encodes variant tag 1 + string", () => {
-    const hex = "ab".repeat(32);
-    const encoded = encodeSignerXOnlyPubKey(hex);
-    expect(encoded[0]).toBe(1);
-    expect(encoded[1]).toBe(64);
-    const strPart = new TextDecoder().decode(encoded.slice(2));
-    expect(strPart).toBe(hex);
-  });
-});
-
-describe("encodeBlsBulkOpCall", () => {
-  it("starts with variant tag 0", () => {
-    const encoded = encodeBlsBulkOpCall(1, 0, 100_000, "contract", "expr");
-    expect(encoded[0]).toBe(0);
-  });
-
-  it("encodes all fields in order", () => {
-    const encoded = encodeBlsBulkOpCall(
-      42,
-      5,
-      DEFAULT_GAS_LIMIT,
-      "filestorage_0_0",
-      "create-agreement(...)",
-    );
-    expect(encoded.length).toBeGreaterThan(20);
-    expect(encoded[0]).toBe(0);
-  });
-});
-
-describe("encodeBlsBulkOpRegisterBlsKey", () => {
-  it("starts with variant tag 1", () => {
-    const encoded = encodeBlsBulkOpRegisterBlsKey(
-      "ab".repeat(32),
-      "cd".repeat(48),
-      "ef".repeat(32),
-      "12".repeat(48),
-    );
-    expect(encoded[0]).toBe(1);
-  });
-});
-
 describe("buildKontorOpMessage", () => {
   it("prefixes with KONTOR-OP-V1", () => {
     const op = new Uint8Array([0x01, 0x02]);
@@ -145,30 +93,113 @@ describe("buildKontorOpMessage", () => {
 });
 
 describe("buildRegistrationMessage", () => {
-  it("produces a message starting with KONTOR-OP-V1", () => {
+  // Format: KONTOR-OP-V1 || postcard((SignerClaim::PubKey(xonly), nonce=0, Inst { Sponsored, RegisterBlsKey }))
+  // Binary after prefix: [0x01, 0x20, 32 bytes, 0x00, 0x01, 0x03, len(bls), bls, len(schnorr), schnorr, len(bls_sig), bls_sig]
+
+  it("starts with KONTOR-OP-V1", () => {
     const msg = buildRegistrationMessage(
       "ab".repeat(32),
-      "cd".repeat(48),
-      "ef".repeat(32),
+      "cd".repeat(96),
+      "ef".repeat(64),
       "12".repeat(48),
     );
-    const prefix = new TextDecoder().decode(msg.slice(0, 12));
-    expect(prefix).toBe("KONTOR-OP-V1");
+    expect(new TextDecoder().decode(msg.slice(0, 12))).toBe("KONTOR-OP-V1");
+  });
+
+  it("byte[12] = 0x01 (SignerClaim::PubKey variant)", () => {
+    const msg = buildRegistrationMessage(
+      "ab".repeat(32),
+      "cd".repeat(96),
+      "ef".repeat(64),
+      "12".repeat(48),
+    );
     expect(msg[12]).toBe(1);
+  });
+
+  it("byte[13] = 0x20 (length prefix = 32 bytes for raw x-only pubkey)", () => {
+    const msg = buildRegistrationMessage(
+      "ab".repeat(32),
+      "cd".repeat(96),
+      "ef".repeat(64),
+      "12".repeat(48),
+    );
+    expect(msg[13]).toBe(32);
+  });
+
+  it("encodes x-only pubkey as 32 raw bytes (not hex string)", () => {
+    const xOnlyHex = "ab".repeat(32); // 64 hex chars = 32 bytes
+    const msg = buildRegistrationMessage(
+      xOnlyHex,
+      "cd".repeat(96),
+      "ef".repeat(64),
+      "12".repeat(48),
+    );
+    // bytes 14..45 = raw x-only pubkey (all 0xab)
+    const xOnlyBytes = msg.slice(14, 46);
+    expect(Array.from(xOnlyBytes).every((b) => b === 0xab)).toBe(true);
+  });
+
+  it("byte after xonly = 0x00 (nonce = 0)", () => {
+    const msg = buildRegistrationMessage(
+      "ab".repeat(32),
+      "cd".repeat(96),
+      "ef".repeat(64),
+      "12".repeat(48),
+    );
+    // After prefix(12) + variant(1) + len(1) + xonly(32) = offset 46
+    expect(msg[46]).toBe(0); // nonce = 0
+  });
+
+  it("PaymentIntent::Sponsored (0x01) and InstKind::RegisterBlsKey (0x03) follow nonce", () => {
+    const msg = buildRegistrationMessage(
+      "ab".repeat(32),
+      "cd".repeat(96),
+      "ef".repeat(64),
+      "12".repeat(48),
+    );
+    expect(msg[47]).toBe(1); // PaymentIntent::Sponsored
+    expect(msg[48]).toBe(3); // InstKind::RegisterBlsKey
   });
 });
 
 describe("buildCreateAgreementMessage", () => {
-  it("produces a message with variant 0 (Call)", () => {
+  // Format: KONTOR-OP-V1 || postcard((SignerClaim::Id(signer_id), nonce, Inst { Sponsored, Call { contract, expr } }))
+  // Binary after prefix: [0x00, varint(signer_id), varint(nonce), 0x01, 0x01, str(contract), str(expr)]
+
+  it("starts with KONTOR-OP-V1", () => {
     const msg = buildCreateAgreementMessage(
       42,
       5,
       "filestorage_0_0",
       "create-agreement(...)",
     );
-    const prefix = new TextDecoder().decode(msg.slice(0, 12));
-    expect(prefix).toBe("KONTOR-OP-V1");
+    expect(new TextDecoder().decode(msg.slice(0, 12))).toBe("KONTOR-OP-V1");
+  });
+
+  it("byte[12] = 0x00 (SignerClaim::Id variant)", () => {
+    const msg = buildCreateAgreementMessage(
+      42,
+      5,
+      "filestorage_0_0",
+      "create-agreement(...)",
+    );
     expect(msg[12]).toBe(0);
+  });
+
+  it("encodes signer_id and nonce as varints, then Sponsored(0x01) + Call(0x01)", () => {
+    // signer_id=1 (1 byte), nonce=0 (1 byte) → offset 12+1+1+1 = 15 for Sponsored
+    const msg = buildCreateAgreementMessage(1, 0, "filestorage_0_0", "expr");
+    expect(msg[12]).toBe(0);  // SignerClaim::Id
+    expect(msg[13]).toBe(1);  // signer_id = 1
+    expect(msg[14]).toBe(0);  // nonce = 0
+    expect(msg[15]).toBe(1);  // PaymentIntent::Sponsored
+    expect(msg[16]).toBe(1);  // InstKind::Call
+  });
+
+  it("does NOT contain gas_limit bytes [0xa0, 0x8d, 0x06] from old format", () => {
+    const msg = buildCreateAgreementMessage(1, 0, "filestorage_0_0", "expr");
+    const hex = bytesToHex(msg);
+    expect(hex).not.toContain("a08d06");
   });
 });
 
@@ -335,10 +366,6 @@ describe("computeCryptoParams", () => {
 });
 
 describe("constants", () => {
-  it("DEFAULT_GAS_LIMIT is 100000", () => {
-    expect(DEFAULT_GAS_LIMIT).toBe(100_000);
-  });
-
   it("KONTOR_BLS_DST matches expected value", () => {
     expect(KONTOR_BLS_DST).toBe(
       "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_",
