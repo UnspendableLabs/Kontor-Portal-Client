@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 0.2.6-rc.3 (2026-05-18)
+
+### Fixes
+
+- **Signer lookup now hits `GET /api/signers/{identifier}` instead of the removed `/api/registry/entry/{...}`** — Horizon-Portal renamed the registry proxy route on 2026-05-13 (server commit `7f8eb71`). The old path returns 404, which `getSignerInfo` then surfaced as `PortalNotFoundError`, making `login()` fall through to `registerInternal()` and fail with `409 Conflict` whenever the user already existed. The new path accepts the same three identifier formats (numeric `signer_id`, x-only pubkey hex, Bitcoin address) so call sites are unchanged.
+
 ## 0.2.6-rc.2 (2026-05-18)
 
 ### Fixes
