@@ -170,7 +170,7 @@ export function buildRegistrationMessage(
 ): Uint8Array {
   const opBytes = concat(
     encodeVarint(1),                          // SignerClaim::PubKey variant
-    encodeBytes(hexToBytes(xOnlyPubKeyHex)),  // 32 raw bytes with length prefix
+    hexToBytes(xOnlyPubKeyHex),               // 32 raw bytes — postcard tuple, no length prefix
     encodeU64Varint(0),                       // nonce = 0 (first-time registration)
     encodeVarint(1),                          // PaymentIntent::Sponsored variant
     encodeVarint(3),                          // InstKind::RegisterBlsKey variant

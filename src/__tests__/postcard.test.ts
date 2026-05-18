@@ -94,7 +94,8 @@ describe("buildKontorOpMessage", () => {
 
 describe("buildRegistrationMessage", () => {
   // Format: KONTOR-OP-V1 || postcard((SignerClaim::PubKey(xonly), nonce=0, Inst { Sponsored, RegisterBlsKey }))
-  // Binary after prefix: [0x01, 0x20, 32 bytes, 0x00, 0x01, 0x03, len(bls), bls, len(schnorr), schnorr, len(bls_sig), bls_sig]
+  // XOnlyPublicKey serializes as a postcard tuple of 32 u8 — raw bytes, NO length prefix.
+  // Binary after prefix: [0x01, 32 raw bytes, 0x00, 0x01, 0x03, len(bls), bls, len(schnorr), schnorr, len(bls_sig), bls_sig]
 
   it("starts with KONTOR-OP-V1", () => {
     const msg = buildRegistrationMessage(
@@ -116,14 +117,15 @@ describe("buildRegistrationMessage", () => {
     expect(msg[12]).toBe(1);
   });
 
-  it("byte[13] = 0x20 (length prefix = 32 bytes for raw x-only pubkey)", () => {
+  it("byte[13] starts the 32 raw x-only bytes (no length prefix — postcard tuple)", () => {
+    const xOnlyHex = "ab".repeat(32);
     const msg = buildRegistrationMessage(
-      "ab".repeat(32),
+      xOnlyHex,
       "cd".repeat(96),
       "ef".repeat(64),
       "12".repeat(48),
     );
-    expect(msg[13]).toBe(32);
+    expect(msg[13]).toBe(0xab);
   });
 
   it("encodes x-only pubkey as 32 raw bytes (not hex string)", () => {
@@ -134,8 +136,8 @@ describe("buildRegistrationMessage", () => {
       "ef".repeat(64),
       "12".repeat(48),
     );
-    // bytes 14..45 = raw x-only pubkey (all 0xab)
-    const xOnlyBytes = msg.slice(14, 46);
+    // bytes 13..44 = raw x-only pubkey (all 0xab) — no length prefix
+    const xOnlyBytes = msg.slice(13, 45);
     expect(Array.from(xOnlyBytes).every((b) => b === 0xab)).toBe(true);
   });
 
@@ -146,8 +148,8 @@ describe("buildRegistrationMessage", () => {
       "ef".repeat(64),
       "12".repeat(48),
     );
-    // After prefix(12) + variant(1) + len(1) + xonly(32) = offset 46
-    expect(msg[46]).toBe(0); // nonce = 0
+    // After prefix(12) + variant(1) + xonly(32) = offset 45
+    expect(msg[45]).toBe(0); // nonce = 0
   });
 
   it("PaymentIntent::Sponsored (0x01) and InstKind::RegisterBlsKey (0x03) follow nonce", () => {
@@ -157,8 +159,63 @@ describe("buildRegistrationMessage", () => {
       "ef".repeat(64),
       "12".repeat(48),
     );
-    expect(msg[47]).toBe(1); // PaymentIntent::Sponsored
-    expect(msg[48]).toBe(3); // InstKind::RegisterBlsKey
+    expect(msg[46]).toBe(1); // PaymentIntent::Sponsored
+    expect(msg[47]).toBe(3); // InstKind::RegisterBlsKey
+  });
+
+  it("does NOT length-prefix the x-only pubkey (regression: postcard tuple, not Vec<u8>)", () => {
+    // XOnlyPublicKey serializes as `tuple(32)` in postcard non-human-readable mode.
+    // A spurious 0x20 length byte would shift every downstream field by 1 and cause
+    // REGISTRATION_SIGNATURE_VERIFICATION_FAILED on the Portal.
+    //
+    // Pick an x-only whose first byte is NOT 0x20 so a regression that re-inserts
+    // the length prefix is visible at msg[13] regardless of the body bytes.
+    const xOnlyHex = "ab".repeat(32);
+    const msg = buildRegistrationMessage(
+      xOnlyHex,
+      "cd".repeat(96),
+      "ef".repeat(64),
+      "12".repeat(48),
+    );
+    expect(msg[13]).not.toBe(0x20);
+  });
+
+  it("has the exact expected total length (no length prefix on x-only)", () => {
+    // KONTOR-OP-V1 (12) + variant (1) + xonly (32) + nonce (1)
+    //   + Sponsored (1) + RegisterBlsKey (1)
+    //   + varint(96) (1) + bls (96)
+    //   + varint(64) (1) + schnorr (64)
+    //   + varint(48) (1) + bls_sig (48)
+    // = 12 + 1 + 32 + 1 + 1 + 1 + 1 + 96 + 1 + 64 + 1 + 48 = 259
+    const msg = buildRegistrationMessage(
+      "ab".repeat(32),
+      "cd".repeat(96),
+      "ef".repeat(64),
+      "12".repeat(48),
+    );
+    expect(msg.length).toBe(259);
+  });
+
+  it("byte-exact layout end-to-end (canary against any encoding drift)", () => {
+    const xOnlyHex = "ab".repeat(32);
+    const blsHex = "cd".repeat(96);
+    const schnorrHex = "ef".repeat(64);
+    const blsSigHex = "12".repeat(48);
+    const msg = buildRegistrationMessage(xOnlyHex, blsHex, schnorrHex, blsSigHex);
+
+    expect(new TextDecoder().decode(msg.slice(0, 12))).toBe("KONTOR-OP-V1");
+    expect(msg[12]).toBe(0x01); // SignerClaim::PubKey variant
+    expect(Array.from(msg.slice(13, 45))).toEqual(Array(32).fill(0xab)); // 32 raw x-only bytes
+    expect(msg[45]).toBe(0x00); // nonce = 0
+    expect(msg[46]).toBe(0x01); // PaymentIntent::Sponsored
+    expect(msg[47]).toBe(0x03); // InstKind::RegisterBlsKey
+    expect(msg[48]).toBe(96);   // varint(96) — single byte since 96 < 128
+    expect(Array.from(msg.slice(49, 145))).toEqual(Array(96).fill(0xcd));
+    expect(msg[145]).toBe(64);
+    expect(Array.from(msg.slice(146, 210))).toEqual(Array(64).fill(0xef));
+    expect(msg[210]).toBe(48);
+    expect(Array.from(msg.slice(211, 259))).toEqual(Array(48).fill(0x12));
+    expect(msg.length).toBe(259);
   });
 });
 

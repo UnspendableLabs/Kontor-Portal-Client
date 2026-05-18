@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 0.2.6-rc.2 (2026-05-18)
+
+### Fixes
+
+- **Registration message: x-only pubkey is now emitted as a postcard tuple (32 raw bytes, no length prefix)** — `buildRegistrationMessage` previously length-prefixed the `XOnlyPublicKey` bytes (`0x20 || 32 bytes`), which did not match the Rust `secp256k1::XOnlyPublicKey` serde implementation. Postcard serializes that type as `tuple(32)` of `u8` — raw bytes, no varint length tag. The extra prefix byte shifted every downstream field by one in the canonical signing message, so the BLS signature verified against different bytes than the Portal reconstructed, causing every `POST /api/users/register` to fail with `REGISTRATION_SIGNATURE_VERIFICATION_FAILED`. `buildCreateAgreementMessage` is unaffected (it uses `SignerClaim::Id(u64)`, not `PubKey`).
+
 ## 0.2.6-rc.1 (2026-05-15)
 
 ### Breaking changes
