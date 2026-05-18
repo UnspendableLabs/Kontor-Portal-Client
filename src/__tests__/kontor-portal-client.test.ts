@@ -769,9 +769,9 @@ describe("KontorPortalClient", () => {
       const info = await client.getSignerInfo("0");
       expect(info.signerId).toBe(42);
       const call = mockFetch.mock.calls.find((c) =>
-        String(c[0]).includes("/api/registry/entry/"),
+        String(c[0]).includes("/api/signers/"),
       );
-      expect(String(call?.[0])).toContain("/api/registry/entry/0");
+      expect(String(call?.[0])).toContain("/api/signers/0");
     });
 
     it("accepts a Bitcoin address (URL-encoded)", async () => {
@@ -780,10 +780,10 @@ describe("KontorPortalClient", () => {
       const info = await client.getSignerInfo(address);
       expect(info.signerId).toBe(42);
       const call = mockFetch.mock.calls.find((c) =>
-        String(c[0]).includes("/api/registry/entry/"),
+        String(c[0]).includes("/api/signers/"),
       );
       expect(String(call?.[0])).toContain(
-        `/api/registry/entry/${encodeURIComponent(address)}`,
+        `/api/signers/${encodeURIComponent(address)}`,
       );
     });
 
@@ -792,7 +792,7 @@ describe("KontorPortalClient", () => {
       client.setJwt(makeJwt());
       await client.getSignerInfo("pub");
       const call = mockFetch.mock.calls.find((c) =>
-        String(c[0]).includes("/api/registry/entry/"),
+        String(c[0]).includes("/api/signers/"),
       );
       expect(call?.[1]?.headers).toHaveProperty("Authorization");
     });

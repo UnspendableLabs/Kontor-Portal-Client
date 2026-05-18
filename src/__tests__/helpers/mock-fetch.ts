@@ -88,7 +88,7 @@ export function createMockFetch(overrides: MockFetchOverrides = {}) {
       }
 
       if (
-        url.startsWith(`${PORTAL_HOST}/api/registry/entry/`)
+        url.startsWith(`${PORTAL_HOST}/api/signers/`)
       ) {
         return (
           overrides.registryEntry?.() ??

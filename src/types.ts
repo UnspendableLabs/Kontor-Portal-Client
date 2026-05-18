@@ -178,7 +178,7 @@ export interface SignerInfo {
   signerId: number;
   /** Effective next nonce after `NonceProvider.getNextNonce` arbitration. */
   nextNonce: number;
-  /** Raw `next_nonce` value returned by `/api/registry/entry` (Portal-authoritative). */
+  /** Raw `next_nonce` value returned by `/api/signers` (Portal-authoritative). */
   chainNonce: number;
   /**
    * Present when the registry entry resolves to a `users` row (lookup by

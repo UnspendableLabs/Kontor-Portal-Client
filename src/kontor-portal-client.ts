@@ -432,7 +432,7 @@ export class KontorPortalClient {
    * Look up signer info in the Portal registry.
    *
    * `idOrPubkeyOrAddress` accepts any of the three formats supported by
-   * `GET /api/registry/entry/{pubkey_or_id}`:
+   * `GET /api/signers/{identifier}`:
    *   1. A numeric Kontor `signer_id` (e.g. `"0"`).
    *   2. An x-only public key in hex (64 hex chars).
    *   3. A Bitcoin address registered with the Portal.
@@ -447,7 +447,7 @@ export class KontorPortalClient {
     }
 
     const res = await fetch(
-      `${this.portalHost}/api/registry/entry/${encodeURIComponent(idOrPubkeyOrAddress)}`,
+      `${this.portalHost}/api/signers/${encodeURIComponent(idOrPubkeyOrAddress)}`,
       { headers },
     );
 
