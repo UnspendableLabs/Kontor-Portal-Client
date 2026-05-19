@@ -290,6 +290,18 @@ describe("buildCreateAgreementExpr", () => {
     );
     expect(expr).toContain('filename: "weird \\"name\\".txt"');
   });
+
+  it("escapes ASCII control characters as \\xNN (Rust wave_escape_string parity)", () => {
+    const expr = buildCreateAgreementExpr(
+      "fid-1",
+      "hash-1",
+      "aabb",
+      512,
+      100,
+      "a\nb\rc\td\0e\x7Ff",
+    );
+    expect(expr).toContain('filename: "a\\x0Ab\\x0Dc\\x09d\\x00e\\x7Ff"');
+  });
 });
 
 describe("buildMintNftExpr", () => {

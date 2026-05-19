@@ -460,7 +460,7 @@ export class KontorPortalClient {
 
     const data = (await res.json()) as {
       signer_id: number;
-      next_nonce: number;
+      next_nonce?: number | null;
       user_id?: string;
       x_only_pubkey?: string;
       bls_pubkey?: string | null;
@@ -472,15 +472,19 @@ export class KontorPortalClient {
       );
     }
 
+    // Portal/Kontor may return `next_nonce: null` until the signer's first op
+    // lands — treat as 0 (same as Horizon-Portal `nonces.rs` unwrap_or(0)).
+    const chainNonce = data.next_nonce ?? 0;
+
     const effectiveNonce = await this.nonceProvider.getNextNonce(
       data.signer_id,
-      data.next_nonce,
+      chainNonce,
     );
 
     return {
       signerId: data.signer_id,
       nextNonce: effectiveNonce,
-      chainNonce: data.next_nonce,
+      chainNonce,
       userId: data.user_id,
       xOnlyPubkey: data.x_only_pubkey,
       blsPubkey:

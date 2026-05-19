@@ -764,6 +764,23 @@ describe("KontorPortalClient", () => {
       );
     });
 
+    it("treats next_nonce: null as 0 (fresh signer, no ops yet)", async () => {
+      mockFetch = createMockFetch({
+        registryEntry: () =>
+          jsonResponse({
+            signer_id: 7,
+            next_nonce: null,
+            x_only_pubkey: "ee".repeat(32),
+            bls_pubkey: "cd".repeat(96),
+          }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      const info = await client.getSignerInfo("ee".repeat(32));
+      expect(info.chainNonce).toBe(0);
+      expect(info.nextNonce).toBe(0);
+    });
+
     it("accepts a numeric signer_id", async () => {
       const client = makeClient();
       const info = await client.getSignerInfo("0");
