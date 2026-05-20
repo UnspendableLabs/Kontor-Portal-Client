@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## 0.2.6-rc.4 (2026-05-19)
+
+### Fixes
+
+- **`getSignerInfo` treats `next_nonce: null` as `0`** — Kontor returns `null` until the signer's first op is processed. The client now coalesces explicitly (`?? 0`), matching Horizon-Portal's `nonces.rs` `unwrap_or(0)`, instead of relying on JavaScript coercion.
+- **`waveEscapeString` now escapes ASCII control characters as `\xNN`** — parity with Rust `wave_escape_string` in `kontor_op.rs` (previously only `\` and `"` were escaped).
+
+### Documentation
+
+- **README** — `getSignerInfo` docs updated to reference `GET /api/signers/{identifier}` (replacing the removed `/api/registry/entry/...` path) and to describe `blsPubkey` as G2 (192 hex chars), not G1.
+
 ## 0.2.6-rc.3 (2026-05-18)
 
 ### Fixes
@@ -74,7 +85,7 @@
 - **`InBrowserCustomSigner`** — new browser-friendly `BLSSigner` implementation that derives a Taproot key + a BLS12-381 G1 (min-sig) key entirely in-process from either a BIP-39 seed (Horizon-Wallet parity, same EIP-2333 derivation) or a single 32-byte secp256k1 private key (Web3Auth / social wallets). In the private-key branch the BIP-32 chain code is synthesized deterministically (`HMAC-SHA512("KONTOR-WEB3AUTH-CHAINCODE-V1", privateKey)`) so the resulting `xpub` stays compatible with Portal. All keys are pre-derived in the constructor; `getAddress`, `getBLSPoP`, and `signBLS` only return cached values plus a fresh BLS signature when needed.
 - **`/bls` subpath export** — new `@unspendablelabs/kontor-portal-client/bls` entry point exposing portable BLS primitives (`KONTOR_BLS_DST`, `deriveMasterSK`, `deriveBlsKey`, `sign`, `getPublicKey`, `signBlsBinding`, `schnorrBindingHash`). Direct port of `Horizon-Wallet/tool/bls-entry.js`, names matching byte-for-byte.
 - **`NonceProvider.setNonce(signerId, nonce)`** — new optional method on the `NonceProvider` interface. `login()` calls it after the registry lookup to force-overwrite the local "last used" tracker with the Portal's authoritative `next_nonce`. Resyncs across tabs/sessions where the local state may be stale (e.g. another tab advanced the nonce, or a persistent provider holds a value ahead of the chain). `InMemoryNonceProvider` implements it. Existing custom providers without `setNonce` keep working unchanged (the call site uses optional chaining).
-- **`SignerInfo.chainNonce`** — new field exposing the raw `next_nonce` value returned by `/api/registry/entry`, alongside the existing `nextNonce` (which remains the post-`NonceProvider` effective value).
+- **`SignerInfo.chainNonce`** — new field exposing the raw `next_nonce` value returned by `GET /api/signers/{identifier}` (coalesced to `0` when the Portal returns `null`), alongside the existing `nextNonce` (which remains the post-`NonceProvider` effective value).
 - **New exported types** — `InBrowserCustomSignerConfig`.
 
 ### Dependencies
@@ -98,7 +109,7 @@
 - **`client.detectWalletNetwork()`** — reads the wallet's network via `getAddress()` and compares it with the client's configured `walletNetwork`. Returns `{ walletNetwork, clientNetwork, matches }`.
 - **`NetworkMismatchError`** — thrown by `login()` (when `options.address` is omitted) if the wallet's reported network differs from the client's configured `walletNetwork`. Surfaces the mismatch before any Portal request.
 - **`KontorPortalClientConfig.walletNetwork`** — explicit override for the wallet-side network identifier. When omitted, derived from `network` (`networks.bitcoin` → `"mainnet"`, anything else → `"signet"`). Set explicitly when targeting `"testnet4"` since bitcoinjs-lib's `testnet` cannot disambiguate testnet3/testnet4/signet.
-- **`SignerInfo.userId`** — present when the registry entry resolves to a `users` row. `login()` uses it to decide between login and register paths. Requires backend support (Portal returns `user_id` in `GET /api/registry/entry/{pubkey_or_id}`).
+- **`SignerInfo.userId`** — present when the registry entry resolves to a `users` row. `login()` uses it to decide between login and register paths. Requires backend support (Portal returns `user_id` in `GET /api/signers/{identifier}` when the identifier matches a registered user).
 - **New exported types** — `WalletNetwork`, `WalletAddress`, `UnifiedLoginStep`, `UnifiedLoginOptions`, `UnifiedLoginResult`.
 
 ### Migration guide

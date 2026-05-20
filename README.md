@@ -182,7 +182,7 @@ await client.login({ address: "bc1p..." });
 - **Signature:** `getSignerInfo(idOrPubkeyOrAddress: string): Promise<SignerInfo>`
 - **Description:** Looks up the signer in the portal registry and returns signer id and next nonce. If a `nonceProvider` is configured, `nextNonce` may be adjusted by `getNextNonce`.
 - **Parameters:**
-  - `idOrPubkeyOrAddress` — Any identifier accepted by `GET /api/registry/entry/{pubkey_or_id}`:
+  - `idOrPubkeyOrAddress` — Any identifier accepted by `GET /api/signers/{identifier}`:
     - a numeric Kontor `signer_id` (e.g. `"0"`),
     - an x-only public key in hex (64 hex chars), or
     - a Bitcoin address registered with the Portal (via `login()` or node registration).
@@ -191,7 +191,7 @@ await client.login({ address: "bc1p..." });
   - `chainNonce` — raw value returned by the Portal registry (Portal-authoritative, used by `login()` to resync the local nonce tracker).
   - `userId` — present when the registry entry resolves to a `users` row (lookup by Bitcoin address or x-only pubkey of a registered user).
   - `xOnlyPubkey` — 64-char hex x-only public key of the signer, as recorded by Kontor. Always present.
-  - `blsPubkey` — BLS12-381 G1 public key (hex), or `null` when the registry entry has no bound BLS key (e.g. some node entries before `register_bls_key`).
+  - `blsPubkey` — BLS12-381 G2 public key (192 hex chars = 96 bytes), or `null` when the registry entry has no bound BLS key (e.g. some node entries before `register_bls_key`).
 - Sends `Authorization` when a JWT is present. Throws `PortalNotFoundError` on 404 (e.g. address not registered). Throws a generic error when the registry response is malformed (missing `x_only_pubkey`).
 
 ### `uploadFile(file, options)`

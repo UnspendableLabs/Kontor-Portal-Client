@@ -105,14 +105,29 @@ export function buildKontorOpMessage(opBytes: Uint8Array): Uint8Array {
 }
 
 /**
- * Escapes `\` and `"` for inclusion inside a WAVE string literal. Order matters:
- * the backslash replacement must run BEFORE the quote replacement, otherwise the
- * backslashes injected by the quote step would be double-escaped.
+ * Escapes `\`, `"`, and ASCII control chars for inclusion inside a WAVE string
+ * literal. Order matters: backslashes are replaced before quotes so injected
+ * backslashes are not double-escaped.
  *
  * Mirrors Rust `wave_escape_string` in `kontor_op.rs`.
  */
 function waveEscapeString(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  let out = '';
+  for (const c of s) {
+    if (c === '\\') {
+      out += '\\\\';
+    } else if (c === '"') {
+      out += '\\"';
+    } else {
+      const code = c.charCodeAt(0);
+      if (code < 0x20 || code === 0x7f) {
+        out += `\\x${code.toString(16).toUpperCase().padStart(2, '0')}`;
+      } else {
+        out += c;
+      }
+    }
+  }
+  return out;
 }
 
 export function buildCreateAgreementExpr(
