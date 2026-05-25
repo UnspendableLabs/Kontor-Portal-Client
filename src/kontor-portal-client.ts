@@ -17,6 +17,9 @@ import {
   type Agreement,
   type AgreementsResponse,
   type ListAgreementsOptions,
+  type Nft,
+  type NftsResponse,
+  type ListNftsOptions,
   type DownloadFileOptions,
   type DownloadUrlResult,
   type WalletNetwork,
@@ -750,6 +753,62 @@ export class KontorPortalClient {
     }
 
     return (await res.json()) as AgreementsResponse;
+  }
+
+  async getNft(nftId: string): Promise<Nft> {
+    const res = await fetch(
+      `${this.portalHost}/api/nfts/${encodeURIComponent(nftId)}`,
+    );
+
+    if (res.status === 404) {
+      throw new PortalNotFoundError("NFT not found");
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to fetch NFT (${res.status})`);
+    }
+
+    return (await res.json()) as Nft;
+  }
+
+  async listNfts(options?: ListNftsOptions): Promise<NftsResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(options?.limit ?? 20));
+    params.set("offset", String(options?.offset ?? 0));
+
+    if (options?.status !== undefined) {
+      const statusValue = Array.isArray(options.status)
+        ? options.status.join("|")
+        : options.status;
+      if (statusValue.length > 0) {
+        params.set("status", statusValue);
+      }
+    }
+
+    if (options?.users && options.users.length > 0) {
+      params.set("users", options.users.join(","));
+    }
+
+    if (options?.mimeType) {
+      params.set("mime_type", options.mimeType);
+    }
+
+    if (options?.sort) {
+      params.set("sort", options.sort);
+    }
+
+    if (options?.sortDir) {
+      params.set("sort_dir", options.sortDir);
+    }
+
+    const res = await fetch(
+      `${this.portalHost}/api/nfts?${params.toString()}`,
+    );
+
+    if (!res.ok) {
+      throw new Error(`Failed to list NFTs (${res.status})`);
+    }
+
+    return (await res.json()) as NftsResponse;
   }
 
   private buildDownloadUrl(

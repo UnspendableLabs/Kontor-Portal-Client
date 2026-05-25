@@ -251,6 +251,32 @@ The `Agreement` type includes the on-chain fields `txid` (Bitcoin transaction id
 
 It also exposes an optional `thumbnail_url` pointing at a 400×400 preview asset — either a short-lived GCS V4 signed URL (`*.thumb.jpg` for raster images, `*.thumb.svg` placeholder for other MIME types) or the public SVG fallback at `GET /api/thumbnails/fallback?filename=<filename>` for legacy rows. The field is `undefined` on older Portal deployments without thumbnail support, so guard against that before rendering. Use it directly in `<img>` tags for previews; it does **not** replace `getDownloadUrl()` / `downloadFile()` for the original file bytes.
 
+### `getNft(nftId)`
+
+- **Signature:** `getNft(nftId: string): Promise<Nft>`
+- **Description:** GETs a single NFT mint by its `nft_id`. Joins the `nft_mints` row with its backing agreement and file to return the full NFT shape in one response. **Public endpoint** — no JWT required.
+- **Parameters:**
+  - `nftId` — The NFT identifier (≤ 64 UTF-8 bytes).
+- **Returns:** `Nft` (see type below). Throws `PortalNotFoundError` on 404, or a generic error on other failures.
+
+### `listNfts(options?)`
+
+- **Signature:** `listNfts(options?: ListNftsOptions): Promise<NftsResponse>`
+- **Description:** GETs a paginated list of NFT mints with optional filtering and sorting. Joins each mint with its backing agreement and file, so `file_url` and `thumbnail_url` are available in one request. **Public endpoint** — no JWT required.
+- **Parameters:**
+  - `options?.limit` — Page size (default 20, max 100).
+  - `options?.offset` — Offset (default 0).
+  - `options?.status` — Filter by mint status. Pass a single string (e.g. `"confirmed"`) or an array (e.g. `["ready", "confirmed"]`) serialized as pipe-separated (`status=ready|confirmed`). Allowed values: `ready`, `pending`, `confirmed`, `failed`.
+  - `options?.users` — Array of user IDs (file owners), serialized as a comma-separated list.
+  - `options?.mimeType` — MIME type filter (sent as `mime_type`).
+  - `options?.sort` — Sort field: `"created_at"` (server default) or `"nft_id"`. Sorting by `size` or `filename` is not supported for NFTs.
+  - `options?.sortDir` — Sort direction: `"asc"` or `"desc"` (sent as `sort_dir`).
+- **Returns:** `NftsResponse` with `offset`, `limit`, `total`, and `nfts[]`.
+
+The `Nft` type includes all NFT-specific fields (`nft_id`, immutable `attributes[]`, `status`, `agreement_status`, `file_url`, `thumbnail_url`) alongside the backing file fields (`filename`, `mime_type`, `original_size`, `agreement_id`, `file_id`, `user_id`). `agreement_id` always equals `file_id` for NFTs — the NFT contract's `mint(...)` invokes `filestorage::create-agreement(...)` internally.
+
+`file_url` is a short-lived GCS V4 signed URL suitable for inline display (`<img src=...>`). It is `null` only when the GCS signing key is misconfigured server-side — fall back to `getDownloadUrl()` in that case. `thumbnail_url` is always non-null (same policy as `Agreement.thumbnail_url`).
+
 ### `getDownloadUrl(agreementId, options?)`
 
 - **Signature:** `getDownloadUrl(agreementId: string, options?: DownloadFileOptions): Promise<DownloadUrlResult>`

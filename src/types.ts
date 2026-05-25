@@ -314,6 +314,41 @@ export interface ListAgreementsOptions {
   sortDir?: "asc" | "desc";
 }
 
+export interface Nft {
+  nft_id: string;
+  agreement_id: string;
+  file_id: string;
+  user_id: string;
+  filename: string;
+  mime_type: string;
+  original_size: number;
+  attributes: NftAttribute[];
+  status: "ready" | "pending" | "confirmed" | "failed";
+  agreement_status: "ready" | "pending" | "confirmed" | "completed" | "failed";
+  created_at: string;
+  agreement_created_at: string;
+  /** null only when the GCS signing key is misconfigured server-side */
+  file_url: string | null;
+  thumbnail_url: string;
+}
+
+export interface NftsResponse {
+  offset: number;
+  limit: number;
+  total: number;
+  nfts: Nft[];
+}
+
+export interface ListNftsOptions {
+  limit?: number;
+  offset?: number;
+  status?: string | string[];
+  users?: string[];
+  mimeType?: string;
+  sort?: "created_at" | "nft_id";
+  sortDir?: "asc" | "desc";
+}
+
 export interface DownloadFileOptions {
   /** When `true`, set the `force_download` query flag so the URL serves with `Content-Disposition: attachment`. */
   forceDownload?: boolean;

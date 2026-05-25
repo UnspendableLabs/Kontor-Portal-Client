@@ -1,4 +1,4 @@
-import type { BLSPoP, Agreement, AgreementsResponse } from "../../types";
+import type { BLSPoP, Agreement, AgreementsResponse, Nft, NftsResponse } from "../../types";
 import type { PrepareResult } from "../../kontor-crypto";
 
 export const PORTAL_HOST = "https://portal.test";
@@ -106,6 +106,30 @@ export const AGREEMENTS_RESPONSE: AgreementsResponse = {
   limit: 20,
   total: 1,
   agreements: [AGREEMENT],
+};
+
+export const NFT: Nft = {
+  nft_id: "mona-lisa-001",
+  agreement_id: "file-nft-1",
+  file_id: "file-nft-1",
+  user_id: "user-1",
+  filename: "mona-lisa.png",
+  mime_type: "image/png",
+  original_size: 1048576,
+  attributes: [{ key: "artist", value: "Leonardo da Vinci" }],
+  status: "confirmed",
+  agreement_status: "confirmed",
+  created_at: "2025-01-01T00:00:00Z",
+  agreement_created_at: "2025-01-01T00:00:00Z",
+  file_url: "https://storage.googleapis.com/bucket/nft.png?sig=abc",
+  thumbnail_url: "https://storage.googleapis.com/bucket/nft.thumb.jpg?sig=abc",
+};
+
+export const NFTS_RESPONSE: NftsResponse = {
+  offset: 0,
+  limit: 20,
+  total: 1,
+  nfts: [NFT],
 };
 
 export const DOWNLOAD_URL =
