@@ -2,30 +2,7 @@
 
 ## [Unreleased]
 
-## 0.2.6-rc.4 (2026-05-19)
-
-### Fixes
-
-- **`getSignerInfo` treats `next_nonce: null` as `0`** — Kontor returns `null` until the signer's first op is processed. The client now coalesces explicitly (`?? 0`), matching Horizon-Portal's `nonces.rs` `unwrap_or(0)`, instead of relying on JavaScript coercion.
-- **`waveEscapeString` now escapes ASCII control characters as `\xNN`** — parity with Rust `wave_escape_string` in `kontor_op.rs` (previously only `\` and `"` were escaped).
-
-### Documentation
-
-- **README** — `getSignerInfo` docs updated to reference `GET /api/signers/{identifier}` (replacing the removed `/api/registry/entry/...` path) and to describe `blsPubkey` as G2 (192 hex chars), not G1.
-
-## 0.2.6-rc.3 (2026-05-18)
-
-### Fixes
-
-- **Signer lookup now hits `GET /api/signers/{identifier}` instead of the removed `/api/registry/entry/{...}`** — Horizon-Portal renamed the registry proxy route on 2026-05-13 (server commit `7f8eb71`). The old path returns 404, which `getSignerInfo` then surfaced as `PortalNotFoundError`, making `login()` fall through to `registerInternal()` and fail with `409 Conflict` whenever the user already existed. The new path accepts the same three identifier formats (numeric `signer_id`, x-only pubkey hex, Bitcoin address) so call sites are unchanged.
-
-## 0.2.6-rc.2 (2026-05-18)
-
-### Fixes
-
-- **Registration message: x-only pubkey is now emitted as a postcard tuple (32 raw bytes, no length prefix)** — `buildRegistrationMessage` previously length-prefixed the `XOnlyPublicKey` bytes (`0x20 || 32 bytes`), which did not match the Rust `secp256k1::XOnlyPublicKey` serde implementation. Postcard serializes that type as `tuple(32)` of `u8` — raw bytes, no varint length tag. The extra prefix byte shifted every downstream field by one in the canonical signing message, so the BLS signature verified against different bytes than the Portal reconstructed, causing every `POST /api/users/register` to fail with `REGISTRATION_SIGNATURE_VERIFICATION_FAILED`. `buildCreateAgreementMessage` is unaffected (it uses `SignerClaim::Id(u64)`, not `PubKey`).
-
-## 0.2.6-rc.1 (2026-05-15)
+## 0.2.6 (2026-05-25)
 
 ### Breaking changes
 
@@ -39,9 +16,17 @@
 
 ### Fixes
 
+- **`getSignerInfo` treats `next_nonce: null` as `0`** — Kontor returns `null` until the signer's first op is processed. The client now coalesces explicitly (`?? 0`), matching Horizon-Portal's `nonces.rs` `unwrap_or(0)`, instead of relying on JavaScript coercion.
+- **`waveEscapeString` now escapes ASCII control characters as `\xNN`** — parity with Rust `wave_escape_string` in `kontor_op.rs` (previously only `\` and `"` were escaped).
+- **Signer lookup now hits `GET /api/signers/{identifier}` instead of the removed `/api/registry/entry/{...}`** — Horizon-Portal renamed the registry proxy route on 2026-05-13 (server commit `7f8eb71`). The old path returns 404, which `getSignerInfo` then surfaced as `PortalNotFoundError`, making `login()` fall through to `registerInternal()` and fail with `409 Conflict` whenever the user already existed. The new path accepts the same three identifier formats (numeric `signer_id`, x-only pubkey hex, Bitcoin address) so call sites are unchanged.
+- **Registration message: x-only pubkey is now emitted as a postcard tuple (32 raw bytes, no length prefix)** — `buildRegistrationMessage` previously length-prefixed the `XOnlyPublicKey` bytes (`0x20 || 32 bytes`), which did not match the Rust `secp256k1::XOnlyPublicKey` serde implementation. Postcard serializes that type as `tuple(32)` of `u8` — raw bytes, no varint length tag. The extra prefix byte shifted every downstream field by one in the canonical signing message, so the BLS signature verified against different bytes than the Portal reconstructed, causing every `POST /api/users/register` to fail with `REGISTRATION_SIGNATURE_VERIFICATION_FAILED`. `buildCreateAgreementMessage` is unaffected (it uses `SignerClaim::Id(u64)`, not `PubKey`).
 - **Registration message now encodes x-only pubkey as 32 raw bytes** — `buildRegistrationMessage` previously encoded the x-only public key as a 64-character hex ASCII string. It now encodes it as 32 raw bytes (with postcard-compatible length prefix), matching the Rust `SignerClaim::PubKey(XOnlyPublicKey)` non-human-readable serde representation.
 - **Signing message format updated to `(SignerClaim, nonce, Inst)` tuple** — both `buildRegistrationMessage` and `buildCreateAgreementMessage` now emit `KONTOR-OP-V1 || postcard((claim, nonce, Inst { payment, kind }))`, matching the Rust `Inst::aggregate_signing_message`. The old format used a legacy `BlsBulkOp` wrapper with an embedded `gas_limit` field that no longer exists in the protocol.
 - **BLS public key type corrected to G2** — `SignerInfo.blsPubkey` doc comment updated from G1 to G2 (192 hex chars = 96 bytes), matching the Portal API and Kontor registry.
+
+### Documentation
+
+- **README** — `getSignerInfo` docs updated to reference `GET /api/signers/{identifier}` (replacing the removed `/api/registry/entry/...` path) and to describe `blsPubkey` as G2 (192 hex chars), not G1.
 
 ## 0.2.5 (2026-05-13)
 
