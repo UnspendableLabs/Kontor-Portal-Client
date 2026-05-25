@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## 0.2.7 (2026-05-25)
+
+### Features
+
+- **`getNft(nftId)`** — new public method that fetches a single NFT mint by its `nft_id` via `GET /api/nfts/{nft_id}`. Joins the `nft_mints` row with its backing agreement and file server-side. No JWT required. Throws `PortalNotFoundError` on 404.
+- **`listNfts(options?)`** — new public method that fetches a paginated list of NFT mints via `GET /api/nfts`. Supports `limit`, `offset`, `status` (string or array, pipe-serialized), `users` (comma-serialized), `mimeType`, `sort` (`created_at` | `nft_id`), and `sortDir` (`asc` | `desc`). No JWT required.
+- **New exported types** — `Nft`, `NftsResponse`, `ListNftsOptions`.
+
 ## 0.2.6 (2026-05-25)
 
 ### Breaking changes

@@ -1548,4 +1548,140 @@ describe("KontorPortalClient", () => {
       );
     });
   });
+
+  describe("getNft", () => {
+    it("returns the NFT for a valid nft_id", async () => {
+      const client = makeClient();
+      const nft = await client.getNft("mona-lisa-001");
+      expect(nft.nft_id).toBe("mona-lisa-001");
+      expect(nft.attributes).toHaveLength(1);
+    });
+
+    it("throws PortalNotFoundError on 404", async () => {
+      mockFetch = createMockFetch({
+        nftGet: () => textResponse("Not Found", 404),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.getNft("missing")).rejects.toBeInstanceOf(
+        PortalNotFoundError,
+      );
+    });
+
+    it("throws on other errors", async () => {
+      mockFetch = createMockFetch({
+        nftGet: () => textResponse("error", 500),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.getNft("mona-lisa-001")).rejects.toThrow(
+        "Failed to fetch NFT",
+      );
+    });
+
+    it("works without JWT (public endpoint)", async () => {
+      const client = makeClient();
+      await client.getNft("mona-lisa-001");
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts/mona-lisa-001"),
+      );
+      expect(call).toBeDefined();
+      const headers = (call?.[1]?.headers ?? {}) as Record<string, string>;
+      expect(headers).not.toHaveProperty("Authorization");
+    });
+  });
+
+  describe("listNfts", () => {
+    it("returns paginated response with defaults", async () => {
+      const client = makeClient();
+      const res = await client.listNfts();
+      expect(res.nfts).toHaveLength(1);
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts?"),
+      );
+      expect(String(call?.[0])).toContain("limit=20");
+      expect(String(call?.[0])).toContain("offset=0");
+    });
+
+    it("passes custom limit and offset", async () => {
+      const client = makeClient();
+      await client.listNfts({ limit: 5, offset: 10 });
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts?"),
+      );
+      expect(String(call?.[0])).toContain("limit=5");
+      expect(String(call?.[0])).toContain("offset=10");
+    });
+
+    it("passes status filter as string", async () => {
+      const client = makeClient();
+      await client.listNfts({ status: "confirmed" });
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts?"),
+      );
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("status")).toBe("confirmed");
+    });
+
+    it("passes status filter as array (joined by |)", async () => {
+      const client = makeClient();
+      await client.listNfts({ status: ["ready", "confirmed"] });
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts?"),
+      );
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("status")).toBe("ready|confirmed");
+    });
+
+    it("passes users filter (joined by ,)", async () => {
+      const client = makeClient();
+      await client.listNfts({ users: ["user-1", "user-2"] });
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts?"),
+      );
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("users")).toBe("user-1,user-2");
+    });
+
+    it("passes mimeType filter", async () => {
+      const client = makeClient();
+      await client.listNfts({ mimeType: "image/png" });
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts?"),
+      );
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("mime_type")).toBe("image/png");
+    });
+
+    it("passes sort and sortDir", async () => {
+      const client = makeClient();
+      await client.listNfts({ sort: "nft_id", sortDir: "asc" });
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts?"),
+      );
+      const url = new URL(String(call?.[0]));
+      expect(url.searchParams.get("sort")).toBe("nft_id");
+      expect(url.searchParams.get("sort_dir")).toBe("asc");
+    });
+
+    it("throws on failure", async () => {
+      mockFetch = createMockFetch({
+        nftsList: () => textResponse("error", 500),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+      const client = makeClient();
+      await expect(client.listNfts()).rejects.toThrow("Failed to list NFTs");
+    });
+
+    it("works without JWT (public endpoint)", async () => {
+      const client = makeClient();
+      await client.listNfts();
+      const call = mockFetch.mock.calls.find((c) =>
+        String(c[0]).includes("/api/nfts?"),
+      );
+      expect(call).toBeDefined();
+      const headers = (call?.[1]?.headers ?? {}) as Record<string, string>;
+      expect(headers).not.toHaveProperty("Authorization");
+    });
+  });
 });

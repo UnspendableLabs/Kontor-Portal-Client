@@ -5,6 +5,8 @@ import {
   makeJwt,
   AGREEMENT,
   AGREEMENTS_RESPONSE,
+  NFT,
+  NFTS_RESPONSE,
   DOWNLOAD_URL,
   DOWNLOAD_FILE_CONTENT,
 } from "./fixtures";
@@ -33,6 +35,8 @@ export interface MockFetchOverrides {
   agreementsList?: () => Response | Promise<Response>;
   agreementDownload?: () => Response | Promise<Response>;
   signedDownload?: () => Response | Promise<Response>;
+  nftGet?: () => Response | Promise<Response>;
+  nftsList?: () => Response | Promise<Response>;
 }
 
 export function createMockFetch(overrides: MockFetchOverrides = {}) {
@@ -167,6 +171,14 @@ export function createMockFetch(overrides: MockFetchOverrides = {}) {
           overrides.agreementsList?.() ??
           jsonResponse(AGREEMENTS_RESPONSE)
         );
+      }
+
+      if (url.match(/\/api\/nfts\/[^?]/) && method === "GET") {
+        return overrides.nftGet?.() ?? jsonResponse(NFT);
+      }
+
+      if (url.startsWith(`${PORTAL_HOST}/api/nfts`) && method === "GET") {
+        return overrides.nftsList?.() ?? jsonResponse(NFTS_RESPONSE);
       }
 
       return textResponse("Not Found", 404);
