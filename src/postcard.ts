@@ -176,7 +176,7 @@ export function buildMintNftExpr(
 
 // --- Full signing message builders ---
 
-// Builds: KONTOR-OP-V1 || postcard((SignerClaim::PubKey(xonly), 0, Inst { Sponsored, RegisterBlsKey }))
+// Builds: KONTOR-OP-V1 || postcard((SignerRef::PubKey(xonly), 0, PaymentIntent::Sponsored, InstKind::RegisterBlsKey, ...))
 export function buildRegistrationMessage(
   xOnlyPubKeyHex: string,
   blsPubkeyHex: string,
@@ -184,11 +184,11 @@ export function buildRegistrationMessage(
   blsSigHex: string,
 ): Uint8Array {
   const opBytes = concat(
-    encodeVarint(1),                          // SignerClaim::PubKey variant
-    hexToBytes(xOnlyPubKeyHex),               // 32 raw bytes — postcard tuple, no length prefix
-    encodeU64Varint(0),                       // nonce = 0 (first-time registration)
-    encodeVarint(1),                          // PaymentIntent::Sponsored variant
-    encodeVarint(3),                          // InstKind::RegisterBlsKey variant
+    encodeVarint(1),                // SignerRef::XOnlyPubkey variant
+    hexToBytes(xOnlyPubKeyHex),    // 32 raw bytes — postcard tuple, no length prefix
+    encodeU64Varint(0),            // nonce = 0 (first-time registration)
+    encodeVarint(1),               // PaymentIntent::Sponsored
+    encodeVarint(3),               // InstKind::RegisterBlsKey variant
     encodeBytes(hexToBytes(blsPubkeyHex)),
     encodeBytes(hexToBytes(schnorrSigHex)),
     encodeBytes(hexToBytes(blsSigHex)),
@@ -196,7 +196,7 @@ export function buildRegistrationMessage(
   return buildKontorOpMessage(opBytes);
 }
 
-// Builds: KONTOR-OP-V1 || postcard((SignerClaim::Id(signer_id), nonce, Inst { Sponsored, Call { contract, expr } }))
+// Builds: KONTOR-OP-V1 || postcard((SignerRef::Id(signer_id), nonce, PaymentIntent::Sponsored, InstKind::Call, contract, expr))
 export function buildCreateAgreementMessage(
   signerId: number | bigint,
   nonce: number | bigint,
@@ -204,11 +204,11 @@ export function buildCreateAgreementMessage(
   expr: string,
 ): Uint8Array {
   const opBytes = concat(
-    encodeVarint(0),           // SignerClaim::Id variant
+    encodeVarint(0),               // SignerRef::SignerId variant
     encodeU64Varint(signerId),
     encodeU64Varint(nonce),
-    encodeVarint(1),           // PaymentIntent::Sponsored variant
-    encodeVarint(1),           // InstKind::Call variant
+    encodeVarint(1),               // PaymentIntent::Sponsored
+    encodeVarint(1),               // InstKind::Call variant
     encodeString(contract),
     encodeString(expr),
   );

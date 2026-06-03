@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 0.2.9 (2026-06-03)
+
+### Fixes
+
+- **`buildRegistrationMessage` and `buildCreateAgreementMessage` now include `Inst.gas_limit`** — the Portal synced to Kontor on 2026-05-31 (commit `c0d8e33`), extending the aggregate signing message format from `postcard((claim, nonce, inst))` to `postcard((claim, nonce, sponsored, inst))` where `inst` is `Inst { gas_limit: u64, kind: InstKind }`. Both `buildRegistrationMessage` (RegisterBlsKey) and `buildCreateAgreementMessage` (Call) were missing `Inst.gas_limit`, causing every BLS signature verified by the new Portal to fail. Both now encode `DEFAULT_AGGREGATE_GAS_LIMIT = 100_000` (matching `DEFAULT_BLSBULK_GAS_LIMIT` on the Portal) between the `sponsored` bool and the `InstKind` variant.
+
 ## 0.2.8 (2026-06-03)
 
 ### Fixes
