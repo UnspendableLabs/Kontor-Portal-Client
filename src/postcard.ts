@@ -176,7 +176,10 @@ export function buildMintNftExpr(
 
 // --- Full signing message builders ---
 
-// Builds: KONTOR-OP-V1 || postcard((SignerRef::PubKey(xonly), 0, PaymentIntent::Sponsored, InstKind::RegisterBlsKey, ...))
+// Must match DEFAULT_BLSBULK_GAS_LIMIT on the Portal — used for both RegisterBlsKey and Call ops.
+const DEFAULT_GAS_LIMIT = 100_000;
+
+// Builds: KONTOR-OP-V1 || postcard((SignerRef::XOnlyPubkey(xonly), 0, sponsored=true, Inst { gas_limit, RegisterBlsKey { ... } }))
 export function buildRegistrationMessage(
   xOnlyPubKeyHex: string,
   blsPubkeyHex: string,
@@ -184,11 +187,12 @@ export function buildRegistrationMessage(
   blsSigHex: string,
 ): Uint8Array {
   const opBytes = concat(
-    encodeVarint(1),                // SignerRef::XOnlyPubkey variant
-    hexToBytes(xOnlyPubKeyHex),    // 32 raw bytes — postcard tuple, no length prefix
-    encodeU64Varint(0),            // nonce = 0 (first-time registration)
-    encodeVarint(1),               // PaymentIntent::Sponsored
-    encodeVarint(3),               // InstKind::RegisterBlsKey variant
+    encodeVarint(1),                           // SignerRef::XOnlyPubkey variant
+    hexToBytes(xOnlyPubKeyHex),               // 32 raw bytes — postcard tuple, no length prefix
+    encodeU64Varint(0),                        // nonce = 0 (first-time registration)
+    new Uint8Array([0x01]),                    // sponsored = true (bool)
+    encodeU64Varint(DEFAULT_GAS_LIMIT),        // Inst.gas_limit = 100_000
+    encodeVarint(3),                           // InstKind::RegisterBlsKey variant
     encodeBytes(hexToBytes(blsPubkeyHex)),
     encodeBytes(hexToBytes(schnorrSigHex)),
     encodeBytes(hexToBytes(blsSigHex)),
@@ -196,7 +200,7 @@ export function buildRegistrationMessage(
   return buildKontorOpMessage(opBytes);
 }
 
-// Builds: KONTOR-OP-V1 || postcard((SignerRef::Id(signer_id), nonce, PaymentIntent::Sponsored, InstKind::Call, contract, expr))
+// Builds: KONTOR-OP-V1 || postcard((SignerRef::SignerId(signer_id), nonce, sponsored=true, Inst { gas_limit, Call { contract, expr } }))
 export function buildCreateAgreementMessage(
   signerId: number | bigint,
   nonce: number | bigint,
@@ -204,11 +208,12 @@ export function buildCreateAgreementMessage(
   expr: string,
 ): Uint8Array {
   const opBytes = concat(
-    encodeVarint(0),               // SignerRef::SignerId variant
+    encodeVarint(0),                           // SignerRef::SignerId variant
     encodeU64Varint(signerId),
     encodeU64Varint(nonce),
-    encodeVarint(1),               // PaymentIntent::Sponsored
-    encodeVarint(1),               // InstKind::Call variant
+    new Uint8Array([0x01]),                    // sponsored = true (bool)
+    encodeU64Varint(DEFAULT_GAS_LIMIT),        // Inst.gas_limit = 100_000
+    encodeVarint(1),                           // InstKind::Call variant
     encodeString(contract),
     encodeString(expr),
   );
