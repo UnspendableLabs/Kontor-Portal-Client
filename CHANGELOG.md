@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 0.2.8 (2026-06-03)
+
+### Fixes
+
+- **Missing exports from `src/index.ts`** — `Nft`, `NftsResponse`, `ListNftsOptions` (types) and `buildCreateAgreementExpr` (function) were documented in v0.2.7 but never re-exported from the package entry point, making them unreachable for consumers.
+
 ## 0.2.7 (2026-05-25)
 
 ### Features

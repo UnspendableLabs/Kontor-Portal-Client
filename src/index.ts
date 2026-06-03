@@ -29,6 +29,9 @@ export type {
   Agreement,
   AgreementsResponse,
   ListAgreementsOptions,
+  Nft,
+  NftsResponse,
+  ListNftsOptions,
   DownloadFileOptions,
   DownloadUrlResult,
   PrepareResult,
@@ -42,6 +45,7 @@ export type {
 
 export {
   buildRegistrationMessage,
+  buildCreateAgreementExpr,
   buildMintNftExpr,
   bytesToHex,
   hexToBytes,
