@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 0.2.10 (2026-06-03)
+
+### Fixes
+
+- **`buildRegistrationMessage` and `buildCreateAgreementMessage` now encode `sponsored` as a `bool` and include `Inst.gas_limit`** — the previous encoding used `PaymentIntent::Sponsored` as a varint enum variant (`0x01`) and omitted `Inst.gas_limit` entirely. The correct Kontor wire format is `postcard((claim, nonce, sponsored: bool, Inst { gas_limit: u64, kind: InstKind }))`, where `sponsored` is a raw boolean byte (`0x01` for `true`) and `gas_limit` is a LEB128 u64 placed between `sponsored` and `InstKind`. Both functions now encode `sponsored = true` and `gas_limit = DEFAULT_BLSBULK_GAS_LIMIT = 100_000` (matching `DEFAULT_BLSBULK_GAS_LIMIT` on the Portal), fixing BLS signature verification failures for all registration and file upload operations.
+
 ## 0.2.9 (2026-06-03)
 
 ### Fixes
