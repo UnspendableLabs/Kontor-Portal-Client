@@ -95,7 +95,9 @@ describe("buildKontorOpMessage", () => {
 describe("buildRegistrationMessage", () => {
   // Format: KONTOR-OP-V1 || postcard((SignerRef::XOnlyPubkey(xonly), nonce=0, sponsored=true, Inst { gas_limit, RegisterBlsKey }))
   // XOnlyPublicKey serializes as a postcard tuple of 32 u8 — raw bytes, NO length prefix.
-  // Binary after prefix: [0x01, 32 raw bytes, 0x00, 0x01, varint(100_000), 0x03, len(bls), bls, len(schnorr), schnorr, len(bls_sig), bls_sig]
+  // Binary after prefix: [0x01, 32 raw bytes, 0x00, 0x01, varint(100_000), 0x04, len(bls), bls, len(schnorr), schnorr, len(bls_sig), bls_sig]
+  // 0x04 is `InstKind::RegisterBlsKey`: Publish(0), Call(1), UpdateProvenance(2),
+  // Issuance(3), RegisterBlsKey(4), Sponsor(5).
 
   it("starts with KONTOR-OP-V1", () => {
     const msg = buildRegistrationMessage(
@@ -152,7 +154,7 @@ describe("buildRegistrationMessage", () => {
     expect(msg[45]).toBe(0); // nonce = 0
   });
 
-  it("sponsored=true (0x01) + gas_limit varint + InstKind::RegisterBlsKey (0x03) follow nonce", () => {
+  it("sponsored=true (0x01) + gas_limit varint + InstKind::RegisterBlsKey (0x04) follow nonce", () => {
     const msg = buildRegistrationMessage(
       "ab".repeat(32),
       "cd".repeat(96),
@@ -163,7 +165,7 @@ describe("buildRegistrationMessage", () => {
     expect(msg[47]).toBe(0xa0);   // gas_limit = 100_000 varint byte 0
     expect(msg[48]).toBe(0x8d);   // gas_limit varint byte 1
     expect(msg[49]).toBe(0x06);   // gas_limit varint byte 2
-    expect(msg[50]).toBe(0x03);   // InstKind::RegisterBlsKey
+    expect(msg[50]).toBe(0x04);   // InstKind::RegisterBlsKey
   });
 
   it("does NOT length-prefix the x-only pubkey (regression: postcard tuple, not Vec<u8>)", () => {
@@ -214,7 +216,7 @@ describe("buildRegistrationMessage", () => {
     expect(msg[47]).toBe(0xa0); // gas_limit = 100_000 varint byte 0
     expect(msg[48]).toBe(0x8d); // gas_limit varint byte 1
     expect(msg[49]).toBe(0x06); // gas_limit varint byte 2
-    expect(msg[50]).toBe(0x03); // InstKind::RegisterBlsKey
+    expect(msg[50]).toBe(0x04); // InstKind::RegisterBlsKey
     expect(msg[51]).toBe(96);   // varint(96) — single byte since 96 < 128
     expect(Array.from(msg.slice(52, 148))).toEqual(Array(96).fill(0xcd));
     expect(msg[148]).toBe(64);
@@ -266,6 +268,65 @@ describe("buildCreateAgreementMessage", () => {
     const msg = buildCreateAgreementMessage(1, 0, "filestorage_0_0", "expr");
     const hex = bytesToHex(msg);
     expect(hex).toContain("a08d06");
+  });
+});
+
+describe("cross-language postcard vectors", () => {
+  // Ground truth produced by Kontor's own encoder — `Inst::aggregate_signing_message`
+  // from `core/indexer-types` at the revision Horizon-Portal pins
+  // (`b8e40260`), which is what the Portal re-derives and verifies against.
+  //
+  // These pin *this* encoder, not Kontor's: any edit to `postcard.ts` that
+  // changes the bytes fails here instead of at a user's registration. The
+  // expected strings are static, so they cannot notice Kontor reordering
+  // `SignerRef` / `InstKind` upstream — that drift leaves these green and
+  // breaks registration in production, which is how the 0.2.10 bug shipped.
+  // Detecting it means regenerating the vectors against whatever revision
+  // Horizon-Portal resolves (it tracks `branch = "main"`, so that moves).
+
+  it("matches Kontor's bytes for a RegisterBlsKey op", () => {
+    // SignerRef::XOnlyPubkey(G.x), nonce 0, sponsored true,
+    // Inst { gas_limit: 100_000, RegisterBlsKey { aabb, cc, ddeeff } }
+    const msg = buildRegistrationMessage(
+      "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "aabb",
+      "cc",
+      "ddeeff",
+    );
+    expect(bytesToHex(msg)).toBe(
+      "4b4f4e544f522d4f502d5631" + // "KONTOR-OP-V1"
+        "01" +
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798" +
+        "00" +
+        "01" +
+        "a08d06" +
+        "04" +
+        "02aabb" +
+        "01cc" +
+        "03ddeeff",
+    );
+  });
+
+  it("matches Kontor's bytes for a Call op", () => {
+    // SignerRef::SignerId(7), nonce 3, sponsored true,
+    // Inst { gas_limit: 100_000, Call { filestorage_0_0, "create-agreement()" } }
+    const msg = buildCreateAgreementMessage(
+      7,
+      3,
+      "filestorage_0_0",
+      "create-agreement()",
+    );
+    expect(bytesToHex(msg)).toBe(
+      "4b4f4e544f522d4f502d5631" +
+        "00" +
+        "07" +
+        "03" +
+        "01" +
+        "a08d06" +
+        "01" +
+        "0f66696c6573746f726167655f305f30" +
+        "126372656174652d61677265656d656e742829",
+    );
   });
 });
 

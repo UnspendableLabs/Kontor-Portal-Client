@@ -284,6 +284,18 @@ export interface Agreement {
   blob_size?: number;
   file_hash?: string;
   /**
+   * Stable, append-only slot the filestorage contract assigned this file in
+   * the aggregated ledger (`agreement-data.ledger-index`). Since kontor-crypto
+   * 0.3.0 it is a public input of the Proof-of-Retrievability SNARK: a storage
+   * node must place the file at exactly this index in its local ledger or its
+   * proofs will not verify.
+   *
+   * `null` until the creating Bitcoin transaction is confirmed and reconciled
+   * against Kontor, and `undefined` on Portal deployments older than that
+   * field.
+   */
+  ledger_index?: number | null;
+  /**
    * URL of a 400x400 preview asset. Either a short-lived GCS V4 signed URL
    * (auto-generated `*.thumb.jpg` for raster images, `*.thumb.svg`
    * placeholder for other MIME types) or the public SVG fallback endpoint
