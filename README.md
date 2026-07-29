@@ -230,7 +230,7 @@ The resulting on-chain `agreement_id` equals the `file_id`. Portal-side, an `nft
 - **Description:** GETs a single agreement by ID. **Public endpoint** — no JWT required (you do not need to call `setJwt()` first; any stored JWT is ignored for this call).
 - **Parameters:**
   - `agreementId` — The agreement ID to fetch.
-- **Returns:** `Agreement` (see fields below, including on-chain `txid`, `block_height`, `block_time`, and the optional `thumbnail_url` for previews). Throws if not found (404) or on other errors.
+- **Returns:** `Agreement` (see fields below, including on-chain `txid`, `block_height`, `block_time`, `ledger_index`, and the optional `thumbnail_url` for previews). Throws if not found (404) or on other errors.
 
 ### `listAgreements(options?)`
 
@@ -248,6 +248,8 @@ The resulting on-chain `agreement_id` equals the `file_id`. Portal-side, an `nft
 - **Returns:** `AgreementsResponse` with `offset`, `limit`, `total`, and `agreements[]`.
 
 The `Agreement` type includes the on-chain fields `txid` (Bitcoin transaction id, hex), `block_height`, and `block_time` (Unix timestamp in seconds). All three are nullable until the agreement is confirmed on-chain. The internal `transaction_id` (UUID) remains available for backward compatibility.
+
+It also carries `ledger_index`: the append-only slot the filestorage contract assigned the file in Kontor's aggregated ledger. Since kontor-crypto 0.3.0 that slot is a public input of the Proof-of-Retrievability SNARK, so storage nodes need it verbatim. It is `null` until the creating Bitcoin transaction is confirmed and reconciled against Kontor, and `undefined` on Portal deployments predating the field.
 
 It also exposes an optional `thumbnail_url` pointing at a 400×400 preview asset — either a short-lived GCS V4 signed URL (`*.thumb.jpg` for raster images, `*.thumb.svg` placeholder for other MIME types) or the public SVG fallback at `GET /api/thumbnails/fallback?filename=<filename>` for legacy rows. The field is `undefined` on older Portal deployments without thumbnail support, so guard against that before rendering. Use it directly in `<img>` tags for previews; it does **not** replace `getDownloadUrl()` / `downloadFile()` for the original file bytes.
 
@@ -509,6 +511,10 @@ try {
 `@kontor/kontor-crypto` is a WASM module that handles Reed–Solomon encoding, Merkle tree computation, and file preparation. Because WASM cannot be bundled like regular JavaScript, the module must be **served as a static asset** by your application.
 
 At runtime the client loads the module with a dynamic `import()` from a URL (default: `/kontor-crypto/index.js`). You need to copy the package files into your public/static directory so the browser can fetch them.
+
+### Which crypto version this tracks
+
+The peer range is `^0.2.0`, and that is correct even though Horizon-Portal builds against the Rust crate `kontor-crypto` **0.3.0**. The two version lines are separate crates: `kontor-crypto` 0.3.0 is the prover/verifier (constant-size PoR proofs, ledger indices), and it depends on `kontor-crypto-core` **0.2.0** — the crate that owns `prepare_file`, the Poseidon Merkle tree, the Reed–Solomon parameters, and the `file_id` / `object_id` derivation. `@kontor/kontor-crypto` wraps that same core, so the browser and the 0.3.0 Portal stack compute identical descriptors. Bump this peer range only when `kontor-crypto-core` itself moves.
 
 ### Copy the files
 
