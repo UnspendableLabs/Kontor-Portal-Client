@@ -57,7 +57,11 @@ function blsBindingHashed(xOnlyHex: string) {
   return bls12_381.shortSignatures.hash(msg, KONTOR_BLS_DST);
 }
 
-describe("InBrowserCustomSigner", () => {
+// Same cold-JIT caveat as `bls-primitives.test.ts`: BIP32 derivation plus
+// BLS12-381 pairing work can overrun vitest's 5s default on the first test to
+// touch it, and which file pays that cost depends on run order. Hang guard,
+// not a performance budget.
+describe("InBrowserCustomSigner", { timeout: 30_000 }, () => {
   describe("constructor (seed branch)", () => {
     it("derives the expected mainnet xpub, x-only key, and Taproot address", async () => {
       const signer = new InBrowserCustomSigner({

@@ -49,7 +49,11 @@ const EXPECTED_SCHNORR_BINDING_HASH_PUB_MAIN =
 const EXPECTED_MASTER_SK_EMPTY =
   "4c67e3512877eb063003bea7429ac36ce032b74f5afe83b202e2bdc3298feee1";
 
-describe("bls-primitives", () => {
+// BLS12-381 pairing work (G2 pubkeys, hash-to-curve signing) runs 5-10x slower
+// on a cold JIT than on a warmed one, so the first test to touch it can blow
+// vitest's 5s default on an unwarmed CI runner while every later test passes.
+// The timeout is a hang guard here, not a performance budget.
+describe("bls-primitives", { timeout: 30_000 }, () => {
   describe("KONTOR_BLS_DST", () => {
     it("re-exports the constant from postcard.ts", () => {
       expect(KONTOR_BLS_DST).toBe("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_");
