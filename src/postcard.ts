@@ -192,7 +192,11 @@ export function buildRegistrationMessage(
     encodeU64Varint(0),                        // nonce = 0 (first-time registration)
     new Uint8Array([0x01]),                    // sponsored = true (bool)
     encodeU64Varint(DEFAULT_GAS_LIMIT),        // Inst.gas_limit = 100_000
-    encodeVarint(3),                           // InstKind::RegisterBlsKey variant
+    // InstKind variant index, by declaration order in Kontor's `indexer-types`:
+    // Publish(0), Call(1), UpdateProvenance(2), Issuance(3), RegisterBlsKey(4),
+    // Sponsor(5). `UpdateProvenance` was inserted ahead of `Issuance`, shifting
+    // RegisterBlsKey from 3 to 4.
+    encodeVarint(4),                           // InstKind::RegisterBlsKey variant
     encodeBytes(hexToBytes(blsPubkeyHex)),
     encodeBytes(hexToBytes(schnorrSigHex)),
     encodeBytes(hexToBytes(blsSigHex)),
