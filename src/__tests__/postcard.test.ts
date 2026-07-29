@@ -275,8 +275,14 @@ describe("cross-language postcard vectors", () => {
   // Ground truth produced by Kontor's own encoder — `Inst::aggregate_signing_message`
   // from `core/indexer-types` at the revision Horizon-Portal pins
   // (`b8e40260`), which is what the Portal re-derives and verifies against.
-  // A drift in Kontor's `SignerRef` / `InstKind` declaration order or in the
-  // tuple layout breaks these two vectors before it breaks a user's login.
+  //
+  // These pin *this* encoder, not Kontor's: any edit to `postcard.ts` that
+  // changes the bytes fails here instead of at a user's registration. The
+  // expected strings are static, so they cannot notice Kontor reordering
+  // `SignerRef` / `InstKind` upstream — that drift leaves these green and
+  // breaks registration in production, which is how the 0.2.10 bug shipped.
+  // Detecting it means regenerating the vectors against whatever revision
+  // Horizon-Portal resolves (it tracks `branch = "main"`, so that moves).
 
   it("matches Kontor's bytes for a RegisterBlsKey op", () => {
     // SignerRef::XOnlyPubkey(G.x), nonce 0, sponsored true,
