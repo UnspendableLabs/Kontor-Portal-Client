@@ -1,12 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## 0.3.0 (2026-11-16)
 
 Follows Kontor-Storage-Portal#39 (storage staking, Portal pinned to Kontor `f3ace89a`).
 
 ### Breaking changes
 
 - **`AgreementNode.status` is now `"valid" | "invalid" | "left"`** — the Portal renders each membership's stored status instead of collapsing every non-`valid` row to `"failed"`. `"invalid"` means the join never applied on chain (the node may join again while the agreement is still `ready`); `"left"` means the membership ended — a confirmed `leave-agreement`, or one Kontor refused because the node no longer held the membership (e.g. after a bond cleanup wrote off a slashed node's memberships). `"failed"` is no longer emitted, so code matching `nodes[].status === "failed"` silently stops matching — TypeScript now flags that comparison. Count only `"valid"` rows as live memberships; a `valid` join may still be queued and not on chain yet.
+
+### Compatibility
+
+- **Use 0.3.0 with a Portal deployment that includes Kontor-Storage-Portal#39.** Against an older Portal nothing fails at runtime: signing is unchanged, and `required_collateral` / `storage_weight` are simply `undefined`. But that Portal still renders rejected joins as `nodes[].status === "failed"`, a value outside the 0.3.0 type, so code that switches exhaustively over `"valid" | "invalid" | "left"` will mishandle it. Stay on `0.2.11` until the Portal is upgraded.
 
 ### Added
 
