@@ -261,15 +261,20 @@ export interface UploadResult {
  * One membership row of an agreement, with the status the Portal stores for it:
  *
  * - `"valid"` — live membership: the node's `join-agreement` is queued, batched
- *   or confirmed on Kontor.
+ *   or confirmed on Kontor. A `valid` row is not proof that the join landed
+ *   yet, only that it has not failed.
  * - `"invalid"` — the join never applied (rejected on chain, or its nonce went
  *   stale before it was batched). While the agreement is still `ready` the node
  *   may join again with a fresh nonce, which turns the row back to `"valid"`.
+ *   Once the agreement has left `ready`, the row is final.
  * - `"left"` — the membership ended: the node's `leave-agreement` op was
- *   confirmed on Kontor.
+ *   confirmed on Kontor, or Kontor refused it because the node no longer held
+ *   that membership (e.g. after a bond cleanup wrote off every membership of a
+ *   slashed node).
  *
- * Portal deployments predating storage staking rendered every non-`valid` row
- * as `"failed"`; that value is no longer emitted.
+ * The Portal stores no other value. Portal deployments predating storage
+ * staking rendered every non-`valid` row as `"failed"`; that value is no
+ * longer emitted.
  */
 export interface AgreementNode {
   node_id: string;
@@ -299,8 +304,9 @@ export interface Agreement {
   status: "pending" | "ready" | "confirmed" | "failed" | (string & {});
   /**
    * Every membership row of the agreement — live (`valid`), never applied
-   * (`invalid`) or ended (`left`). The `nodes` filter of
-   * {@link ListAgreementsOptions} only matches `valid` rows.
+   * (`invalid`) or ended (`left`). Count only `valid` rows as live
+   * memberships. The `nodes` filter of {@link ListAgreementsOptions} only
+   * matches `valid` rows.
    */
   nodes: AgreementNode[];
   transaction_id?: string;
@@ -334,8 +340,15 @@ export interface Agreement {
    *
    * `null` until the creating Bitcoin transaction is confirmed and reconciled
    * against Kontor, and `undefined` on Portal deployments without storage
-   * staking. Parse it with integer arithmetic (the value is `amount × 10^18`
-   * exactly), never through a float.
+   * staking. Joins are only accepted while the agreement is still `ready`,
+   * i.e. before that confirmation, so a node deciding whether to join
+   * generally cannot see this value yet: do not wait for it before joining.
+   * Kontor checks the requirement on chain, and a join it refuses ends
+   * `invalid`.
+   *
+   * Parse it with integer arithmetic, never through a float: Kontor holds it
+   * as an integer of `amount × 10^18` (`"0.1"` is `10^17`), and the string is
+   * that exact value.
    */
   required_collateral?: string | null;
   /**

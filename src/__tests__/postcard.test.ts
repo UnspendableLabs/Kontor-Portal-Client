@@ -277,8 +277,11 @@ describe("cross-language postcard vectors", () => {
   // re-derives and verifies against. They still hold at `f3ace89a`, the
   // commit the Portal is now pinned to: between the two, `SignerRef`, `Inst`
   // and `aggregate_signing_message` are unchanged and `InstKind` only gained
-  // a trailing `SponsorBound` variant, so no existing index moved (checked by
-  // reading the sources, not by regenerating the bytes).
+  // a trailing `SponsorBound` variant, so no existing index moved.
+  // `ContractAddress` now comes from Kontor's `built-in-types` crate, but
+  // `InstKind::Call` still serializes it through `Display`
+  // (`name_height_txindex`), from the same macro. Checked by reading the
+  // sources, not by regenerating the bytes.
   //
   // These pin *this* encoder, not Kontor's: any edit to `postcard.ts` that
   // changes the bytes fails here instead of at a user's registration. The

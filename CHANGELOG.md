@@ -6,11 +6,11 @@ Follows Kontor-Storage-Portal#39 (storage staking, Portal pinned to Kontor `f3ac
 
 ### Breaking changes
 
-- **`AgreementNode.status` is now `"valid" | "invalid" | "left"`** — the Portal renders each membership's stored status instead of collapsing every non-`valid` row to `"failed"`. `"invalid"` means the join never applied on chain (the node may join again while the agreement is still `ready`); `"left"` means the membership ended with a confirmed `leave-agreement`. `"failed"` is no longer emitted, so code matching `nodes[].status === "failed"` silently stops matching — TypeScript now flags that comparison. Count only `"valid"` rows as nodes storing the file.
+- **`AgreementNode.status` is now `"valid" | "invalid" | "left"`** — the Portal renders each membership's stored status instead of collapsing every non-`valid` row to `"failed"`. `"invalid"` means the join never applied on chain (the node may join again while the agreement is still `ready`); `"left"` means the membership ended — a confirmed `leave-agreement`, or one Kontor refused because the node no longer held the membership (e.g. after a bond cleanup wrote off a slashed node's memberships). `"failed"` is no longer emitted, so code matching `nodes[].status === "failed"` silently stops matching — TypeScript now flags that comparison. Count only `"valid"` rows as live memberships; a `valid` join may still be queued and not on chain yet.
 
 ### Added
 
-- **`Agreement.required_collateral` and `Agreement.storage_weight`** — KOR amounts as exact decimal strings, assigned by the filestorage contract at creation: the unreserved stake a node must bond to join (a missed challenge is slashed `30 × required_collateral`), and the agreement's share of storage rewards. `null` until the creating transaction is confirmed and reconciled; `undefined` on Portal deployments without storage staking.
+- **`Agreement.required_collateral` and `Agreement.storage_weight`** — KOR amounts as exact decimal strings, assigned by the filestorage contract at creation: the unreserved stake a node must bond to join (a missed challenge is slashed `30 × required_collateral`), and the agreement's share of storage rewards. `null` until the creating transaction is confirmed and reconciled; `undefined` on Portal deployments without storage staking. Joins are only accepted while the agreement is still `ready`, before that confirmation, so a node generally cannot see `required_collateral` when it decides to join — Kontor checks the requirement on chain, and a join it refuses ends `invalid`.
 
 ### Documentation
 
@@ -19,7 +19,7 @@ Follows Kontor-Storage-Portal#39 (storage staking, Portal pinned to Kontor `f3ac
 
 ### Notes
 
-- **No signing change.** The Portal now pins Kontor `f3ace89a` (from `b8e40260`). Between the two, `SignerRef`, `Inst` and `aggregate_signing_message` are unchanged and `InstKind` only gained a trailing `SponsorBound` variant, so `RegisterBlsKey` is still variant `4`, `Call` still `1`, and the registration / upload / mint messages this client signs are byte-identical. The Portal still builds against `kontor-crypto` 0.3.0, so the `^0.2.0` crypto peer range is unchanged.
+- **No signing change.** The Portal now pins Kontor `f3ace89a` (from `b8e40260`). Between the two, `SignerRef`, `Inst` and `aggregate_signing_message` are unchanged and `InstKind` only gained a trailing `SponsorBound` variant, so `RegisterBlsKey` is still variant `4` and `Call` still `1`. `ContractAddress` moved to Kontor's shared `built-in-types` crate, but `Call.contract` is still serialized through its `Display` form (`name_height_txindex`), produced by the same macro. The registration / upload / mint messages this client signs are therefore byte-identical. The Portal still builds against `kontor-crypto` 0.3.0, so the `^0.2.0` crypto peer range is unchanged.
 - The Bitcoin-level changes of that PR (new tap-leaf envelope, reveal signed `SIGHASH_ALL|ANYONECANPAY`) do not reach this client: it never builds or signs PSBTs.
 
 ## 0.2.11 (2026-07-29)
