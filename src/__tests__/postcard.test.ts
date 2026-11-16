@@ -273,16 +273,21 @@ describe("buildCreateAgreementMessage", () => {
 
 describe("cross-language postcard vectors", () => {
   // Ground truth produced by Kontor's own encoder — `Inst::aggregate_signing_message`
-  // from `core/indexer-types` at the revision Horizon-Portal pins
-  // (`b8e40260`), which is what the Portal re-derives and verifies against.
+  // from `core/indexer-types` at Kontor `b8e40260`, which is what the Portal
+  // re-derives and verifies against. They still hold at `f3ace89a`, the
+  // commit the Portal is now pinned to: between the two, `SignerRef`, `Inst`
+  // and `aggregate_signing_message` are unchanged and `InstKind` only gained
+  // a trailing `SponsorBound` variant, so no existing index moved (checked by
+  // reading the sources, not by regenerating the bytes).
   //
   // These pin *this* encoder, not Kontor's: any edit to `postcard.ts` that
   // changes the bytes fails here instead of at a user's registration. The
   // expected strings are static, so they cannot notice Kontor reordering
   // `SignerRef` / `InstKind` upstream — that drift leaves these green and
   // breaks registration in production, which is how the 0.2.10 bug shipped.
-  // Detecting it means regenerating the vectors against whatever revision
-  // Horizon-Portal resolves (it tracks `branch = "main"`, so that moves).
+  // Detecting it means re-checking (or regenerating) the vectors whenever the
+  // Portal moves its Kontor pin (the `rev` of `kontor-indexer` in its
+  // `Cargo.toml`).
 
   it("matches Kontor's bytes for a RegisterBlsKey op", () => {
     // SignerRef::XOnlyPubkey(G.x), nonce 0, sponsored true,
