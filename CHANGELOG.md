@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+Follows Kontor-Storage-Portal#39 (storage staking, Portal pinned to Kontor `f3ace89a`).
+
+### Breaking changes
+
+- **`AgreementNode.status` is now `"valid" | "invalid" | "left"`** — the Portal renders each membership's stored status instead of collapsing every non-`valid` row to `"failed"`. `"invalid"` means the join never applied on chain (the node may join again while the agreement is still `ready`); `"left"` means the membership ended with a confirmed `leave-agreement`. `"failed"` is no longer emitted, so code matching `nodes[].status === "failed"` silently stops matching — TypeScript now flags that comparison. Count only `"valid"` rows as nodes storing the file.
+
+### Added
+
+- **`Agreement.required_collateral` and `Agreement.storage_weight`** — KOR amounts as exact decimal strings, assigned by the filestorage contract at creation: the unreserved stake a node must bond to join (a missed challenge is slashed `30 × required_collateral`), and the agreement's share of storage rewards. `null` until the creating transaction is confirmed and reconciled; `undefined` on Portal deployments without storage staking.
+
+### Documentation
+
+- `Agreement.status`: `pending` can go back to `ready` (transaction cancelled, or confirmed but ignored by Kontor — `txid` may then change), and can stay `pending` after its transaction confirmed until Kontor answers.
+- `getSignerInfo()`: a Bitcoin address is only resolved for a registered Portal user; a storage node is looked up by `signer_id`.
+
+### Notes
+
+- **No signing change.** The Portal now pins Kontor `f3ace89a` (from `b8e40260`). Between the two, `SignerRef`, `Inst` and `aggregate_signing_message` are unchanged and `InstKind` only gained a trailing `SponsorBound` variant, so `RegisterBlsKey` is still variant `4`, `Call` still `1`, and the registration / upload / mint messages this client signs are byte-identical. The Portal still builds against `kontor-crypto` 0.3.0, so the `^0.2.0` crypto peer range is unchanged.
+- The Bitcoin-level changes of that PR (new tap-leaf envelope, reveal signed `SIGHASH_ALL|ANYONECANPAY`) do not reach this client: it never builds or signs PSBTs.
+
 ## 0.2.11 (2026-07-29)
 
 ### Fixes

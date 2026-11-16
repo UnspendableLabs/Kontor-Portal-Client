@@ -251,6 +251,12 @@ The `Agreement` type includes the on-chain fields `txid` (Bitcoin transaction id
 
 It also carries `ledger_index`: the append-only slot the filestorage contract assigned the file in Kontor's aggregated ledger. Since kontor-crypto 0.3.0 that slot is a public input of the Proof-of-Retrievability SNARK, so storage nodes need it verbatim. It is `null` until the creating Bitcoin transaction is confirmed and reconciled against Kontor, and `undefined` on Portal deployments predating the field.
 
+Storage membership is backed by a bonded stake. Each agreement carries `required_collateral` (the unreserved stake a node must have to join; a missed storage challenge is slashed `30 × required_collateral`) and `storage_weight` (its share of storage rewards). Both are KOR amounts as exact decimal strings (`"12.5"`, `"1000"`) — parse them with integer arithmetic, never through a float. Like `ledger_index`, they are `null` until the creating transaction is confirmed and reconciled, and `undefined` on Portal deployments without storage staking.
+
+`nodes[]` lists every membership row with its stored `status`: `"valid"` (live: the join is queued, batched or confirmed on Kontor), `"invalid"` (the join never applied; the node may join again while the agreement is still `ready`) or `"left"` (ended by a confirmed `leave-agreement`). Portal deployments predating storage staking rendered every non-`valid` row as `"failed"`, which is no longer emitted — count only `"valid"` rows as storing the file. The `nodes` filter of `listAgreements()` only matches `valid` rows.
+
+`status: "pending"` is not a one-way step: an agreement goes back to `"ready"` when its Bitcoin transaction is cancelled (never signed in time) or confirmed but ignored by Kontor — its ops are batched again, so `txid` can change — and it can stay `"pending"` after its transaction confirmed while the Portal waits for an answer from Kontor.
+
 It also exposes an optional `thumbnail_url` pointing at a 400×400 preview asset — either a short-lived GCS V4 signed URL (`*.thumb.jpg` for raster images, `*.thumb.svg` placeholder for other MIME types) or the public SVG fallback at `GET /api/thumbnails/fallback?filename=<filename>` for legacy rows. The field is `undefined` on older Portal deployments without thumbnail support, so guard against that before rendering. Use it directly in `<img>` tags for previews; it does **not** replace `getDownloadUrl()` / `downloadFile()` for the original file bytes.
 
 ### `getNft(nftId)`

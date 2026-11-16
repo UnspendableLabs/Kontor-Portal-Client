@@ -438,7 +438,9 @@ export class KontorPortalClient {
    * `GET /api/signers/{identifier}`:
    *   1. A numeric Kontor `signer_id` (e.g. `"0"`).
    *   2. An x-only public key in hex (64 hex chars).
-   *   3. A Bitcoin address registered with the Portal.
+   *   3. The Bitcoin address of a registered Portal user. A storage node's
+   *      address (or a BLS pubkey) is not resolved and answers 404 — look a
+   *      node up by its `signer_id` instead.
    *
    * Throws {@link PortalNotFoundError} on 404 (registry entry / address not
    * registered).
