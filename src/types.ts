@@ -257,9 +257,28 @@ export interface UploadResult {
   size: number;
 }
 
+/**
+ * One membership row of an agreement, with the status the Portal stores for it:
+ *
+ * - `"valid"` — live membership: the node's `join-agreement` is queued, batched
+ *   or confirmed on Kontor. A `valid` row is not proof that the join landed
+ *   yet, only that it has not failed.
+ * - `"invalid"` — the join never applied (rejected on chain, or its nonce went
+ *   stale before it was batched). While the agreement is still `ready` the node
+ *   may join again with a fresh nonce, which turns the row back to `"valid"`.
+ *   Once the agreement has left `ready`, the row is final.
+ * - `"left"` — the membership ended: the node's `leave-agreement` op was
+ *   confirmed on Kontor, or Kontor refused it because the node no longer held
+ *   that membership (e.g. after a bond cleanup wrote off every membership of a
+ *   slashed node).
+ *
+ * The Portal stores no other value. Portal deployments predating storage
+ * staking rendered every non-`valid` row as `"failed"`; that value is no
+ * longer emitted.
+ */
 export interface AgreementNode {
   node_id: string;
-  status: "valid" | "failed";
+  status: "valid" | "invalid" | "left";
 }
 
 export interface Agreement {
@@ -270,7 +289,25 @@ export interface Agreement {
   mime_type: string;
   original_size: number;
   created_at: string;
+  /**
+   * `pending` normally means "in a Bitcoin transaction that is not confirmed
+   * yet", but it is not a one-way step:
+   *
+   * - an agreement can go back from `pending` to `ready` when its transaction
+   *   is cancelled (never signed in time) or ignored by Kontor (confirmed on
+   *   Bitcoin but not read as a Kontor transaction) — its ops are batched
+   *   again, so `txid` may change;
+   * - it can stay `pending` after its transaction confirmed, while the Portal
+   *   cannot get an answer from Kontor; it then becomes `confirmed` (with its
+   *   `ledger_index`) or `failed` once Kontor answers.
+   */
   status: "pending" | "ready" | "confirmed" | "failed" | (string & {});
+  /**
+   * Every membership row of the agreement — live (`valid`), never applied
+   * (`invalid`) or ended (`left`). Count only `valid` rows as live
+   * memberships. The `nodes` filter of {@link ListAgreementsOptions} only
+   * matches `valid` rows.
+   */
   nodes: AgreementNode[];
   transaction_id?: string;
   txid?: string | null;
@@ -295,6 +332,30 @@ export interface Agreement {
    * field.
    */
   ledger_index?: number | null;
+  /**
+   * Unreserved stake (KOR, exact decimal string such as `"12.5"`) a storage
+   * node must have bonded to join this agreement. Each membership reserves
+   * it, and a missed storage challenge is slashed `30 × required_collateral`.
+   * Assigned by the filestorage contract at creation.
+   *
+   * `null` until the creating Bitcoin transaction is confirmed and reconciled
+   * against Kontor, and `undefined` on Portal deployments without storage
+   * staking. Joins are only accepted while the agreement is still `ready`,
+   * i.e. before that confirmation, so a node deciding whether to join
+   * generally cannot see this value yet: do not wait for it before joining.
+   * Kontor checks the requirement on chain, and a join it refuses ends
+   * `invalid`.
+   *
+   * Parse it with integer arithmetic, never through a float: Kontor holds it
+   * as an integer of `amount × 10^18` (`"0.1"` is `10^17`), and the string is
+   * that exact value.
+   */
+  required_collateral?: string | null;
+  /**
+   * The agreement's share of storage rewards (KOR, exact decimal string).
+   * Same lifecycle as {@link Agreement.required_collateral}.
+   */
+  storage_weight?: string | null;
   /**
    * URL of a 400x400 preview asset. Either a short-lived GCS V4 signed URL
    * (auto-generated `*.thumb.jpg` for raster images, `*.thumb.svg`
