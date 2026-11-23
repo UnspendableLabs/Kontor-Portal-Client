@@ -82,6 +82,8 @@ export const AGREEMENT: Agreement = {
   block_time: null,
   // Unconfirmed: the Kontor reconcile pass has not assigned a ledger slot yet.
   ledger_index: null,
+  required_collateral: null,
+  storage_weight: null,
   thumbnail_url: `${PORTAL_HOST}/api/thumbnails/fallback?filename=test.txt`,
 };
 
@@ -94,12 +96,20 @@ export const AGREEMENT_CONFIRMED: Agreement = {
   original_size: 2048,
   created_at: "2025-02-01T00:00:00Z",
   status: "confirmed",
-  nodes: [{ node_id: "node-1", status: "valid" }, { node_id: "node-2", status: "valid" }],
+  nodes: [
+    { node_id: "node-1", status: "valid" },
+    { node_id: "node-2", status: "valid" },
+    // Join rejected on chain, and a membership ended by a confirmed leave.
+    { node_id: "node-3", status: "invalid" },
+    { node_id: "node-4", status: "left" },
+  ],
   transaction_id: "11111111-1111-4111-8111-111111111111",
   txid: "a".repeat(64),
   block_height: 800000,
   block_time: 1700000000,
   ledger_index: 42,
+  required_collateral: "12.5",
+  storage_weight: "1000",
   thumbnail_url:
     "https://storage.googleapis.com/bucket/path/to/file.thumb.jpg?GoogleAccessId=test&Expires=9999&Signature=abc",
 };

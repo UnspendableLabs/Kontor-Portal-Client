@@ -17,6 +17,7 @@ import {
   POP,
   DOWNLOAD_URL,
   DOWNLOAD_FILE_CONTENT,
+  AGREEMENT_CONFIRMED,
 } from "./helpers/fixtures";
 import type { KontorPortalClientConfig, NonceProvider } from "../types";
 import {
@@ -1218,6 +1219,24 @@ describe("KontorPortalClient", () => {
       const client = makeClient();
       const agr = await client.getAgreement("agr-1");
       expect(agr.agreement_id).toBe("agr-1");
+    });
+
+    it("passes through membership statuses and collateral fields", async () => {
+      mockFetch = createMockFetch({
+        agreementGet: () => jsonResponse(AGREEMENT_CONFIRMED),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const client = makeClient();
+      const agr = await client.getAgreement("agr-2");
+      expect(agr.nodes.map((n) => n.status)).toEqual([
+        "valid",
+        "valid",
+        "invalid",
+        "left",
+      ]);
+      expect(agr.required_collateral).toBe("12.5");
+      expect(agr.storage_weight).toBe("1000");
     });
 
     it("throws PortalNotFoundError on 404", async () => {
